@@ -20,11 +20,11 @@ def engine():
             "postgresql+psycopg://user:postgrespassword@localhost:5432/calendar_db",
         ),
     )
+    connect_args = {}
+    if db_url.startswith("postgresql"):
+        connect_args = {"connect_timeout": 2}
 
-    engine = create_engine(
-        db_url,
-        connect_args={"connect_timeout": 2},
-    )
+    engine = create_engine(db_url, connect_args=connect_args)
 
     # Vérifie que Postgres est UP
     try:
