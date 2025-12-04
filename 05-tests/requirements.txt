@@ -5,3 +5,4 @@ fastapi
 sqlalchemy
 python-dotenv
 pydantic
+psycopg[binary]

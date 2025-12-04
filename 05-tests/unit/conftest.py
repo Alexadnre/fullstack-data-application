@@ -1,10 +1,10 @@
-# 05-tests\conftest.py
+# 05-tests\unit\conftest.py
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from unit.db_models import Base
+from db_models import Base
 
 # SQLite in-memory pour les tests
 ENGINE = create_engine("sqlite:///:memory:", future=True)

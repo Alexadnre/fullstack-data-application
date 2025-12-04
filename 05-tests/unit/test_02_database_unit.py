@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from unit.db_models import User, Event
+from db_models import User, Event
 
 
 @pytest.mark.unit
