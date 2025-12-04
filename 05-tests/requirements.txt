@@ -6,3 +6,4 @@ sqlalchemy
 python-dotenv
 pydantic
 psycopg[binary]
+PyJWT
