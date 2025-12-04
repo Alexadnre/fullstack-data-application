@@ -1,17 +1,24 @@
 import os
 import pytest
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 
 from db_models import Base, User, Event
 
+# Charger les variables d'environnement du .env
+load_dotenv()
+
 
 @pytest.fixture(scope="session")
 def engine():
     db_url = os.getenv(
         "TEST_DATABASE_URL",
-        "postgresql+psycopg://user:postgrespassword@localhost:5432/calendar_db",
+        os.getenv(
+            "DATABASE_URL",
+            "postgresql+psycopg://user:postgrespassword@localhost:5432/calendar_db",
+        ),
     )
 
     engine = create_engine(
