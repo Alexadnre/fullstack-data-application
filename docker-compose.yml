@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  db: 
+    build: ./02-database
+    container_name: calendar_db
+    environment:
+      POSTGRES_USER: "user"
+      POSTGRES_PASSWORD: "postgrespassword"
+      POSTGRES_DB: "calendar_db"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

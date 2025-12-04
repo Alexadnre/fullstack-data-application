@@ -1,0 +1,10 @@
+FROM postgres:16
+
+# Variables d’environnement nécessaires pour initialiser la DB
+ENV POSTGRES_USER=user
+ENV POSTGRES_PASSWORD=postgrespassword
+ENV POSTGRES_DB=calendar_db
+
+# Copier les scripts SQL d'initialisation
+COPY calendar_schema.sql /docker-entrypoint-initdb.d/01_schema.sql
+COPY calendar_seed.sql /docker-entrypoint-initdb.d/02_seed.sql
