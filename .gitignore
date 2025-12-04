@@ -1,0 +1,73 @@
+# ========================================
+# PYTHON
+# ========================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.db
+*.sqlite3
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+ENV/
+
+# Fichiers de configuration Python
+*.egg-info/
+.eggs/
+*.egg
+
+# ========================================
+# TESTS / PYTEST
+# ========================================
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ========================================
+# FASTAPI / UVICORN
+# ========================================
+*.log
+
+# ========================================
+# EDITORS / IDE
+# ========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ========================================
+# DOCKER
+# ========================================
+# Volumes montés localement
+postgres_data/
+docker-data/
+data/
+
+# Fichiers générés par docker/build
+*.tar
+*.img
+
+# Ignore Docker Compose override files
+docker-compose.override.yml
+
+# ========================================
+# MISC
+# ========================================
+# Environnement local
+.env
+.env.*
+
+# Compilations ou fichiers temporaires
+*.tmp
+*.bak
+*.old
+
+# OS files
+.DS_Store
+Thumbs.db
