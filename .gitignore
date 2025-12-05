@@ -59,9 +59,7 @@ docker-compose.override.yml
 # ========================================
 # MISC
 # ========================================
-# Environnement local
-.env
-.env.*
+
 
 # Compilations ou fichiers temporaires
 *.tmp
