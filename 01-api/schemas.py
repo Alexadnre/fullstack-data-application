@@ -42,7 +42,7 @@ class EventBase(BaseModel):
 
 
 class EventCreate(EventBase):
-    pass
+    user_id: int
 
 
 class EventUpdate(BaseModel):
@@ -58,6 +58,7 @@ class EventUpdate(BaseModel):
 
 class EventRead(EventBase):
     id: int
+    user_id: int
     status: str
     created_at: datetime
     updated_at: datetime

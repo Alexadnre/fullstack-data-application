@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Utilisateurs - Calendrier{% endblock %}
+
+{% block content %}
+<div class="users-container">
+    <h1>Gestion des utilisateurs</h1>
+    
+    <div class="users-section">
+        <h2>Créer un nouvel utilisateur</h2>
+        <form method="POST" action="/users" class="user-form" hx-post="/users" hx-target="#users-list" hx-swap="outerHTML">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="display_name">Nom d'affichage</label>
+                    <input type="text" id="display_name" name="display_name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="timezone">Fuseau horaire</label>
+                    <input type="text" id="timezone" name="timezone" value="Europe/Paris">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Créer l'utilisateur</button>
+        </form>
+    </div>
+    
+    <div class="users-section" id="users-list">
+        <h2>Liste des utilisateurs</h2>
+        {% if users %}
+        <div class="users-grid">
+            {% for user in users %}
+            <div class="user-card">
+                <h3>{{ user.display_name }}</h3>
+                <p><strong>Email:</strong> {{ user.email }}</p>
+                <p><strong>Fuseau horaire:</strong> {{ user.timezone }}</p>
+                <p><strong>ID:</strong> {{ user.id }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p>Aucun utilisateur trouvé.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

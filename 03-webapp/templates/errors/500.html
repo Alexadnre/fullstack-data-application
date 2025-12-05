@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500 - Erreur serveur</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-box">
+            <h1>500</h1>
+            <h2>Erreur interne du serveur</h2>
+            <p>{{ detail or "Une erreur s'est produite. Veuillez réessayer plus tard." }}</p>
+            {% if detail and "\n" in detail %}
+            <pre style="text-align: left; background: #f5f5f5; padding: 1rem; border-radius: 4px; overflow-x: auto; max-width: 800px; margin: 1rem auto;">{{ detail }}</pre>
+            {% endif %}
+            <a href="/" class="btn btn-primary">Retour à l'accueil</a>
+        </div>
+    </div>
+</body>
+</html>
+

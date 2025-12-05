@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Calendrier{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/calendar" class="nav-logo">📅 Calendrier</a>
+            <div class="nav-links">
+                <a href="/calendar">Calendrier</a>
+                <a href="/users">Utilisateurs</a>
+                {% if request.cookies.get("access_token") %}
+                <a href="/logout">Déconnexion</a>
+                {% else %}
+                <a href="/login">Connexion</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+    
+    <main class="main-content">
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="alert alert-success">{{ success }}</div>
+        {% endif %}
+        
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer class="footer">
+        <p>&copy; 2024 Calendar App</p>
+    </footer>
+</body>
+</html>
+

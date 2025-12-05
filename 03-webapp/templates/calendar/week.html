@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Calendrier - Semaine{% endblock %}
+
+{% block content %}
+<div class="calendar-container">
+    <div class="calendar-header">
+        <h1>Calendrier Hebdomadaire</h1>
+        <div class="week-navigation">
+            <a href="/calendar?week={{ prev_week }}" class="btn btn-secondary">← Semaine précédente</a>
+            <span class="week-range">
+                {% if start_date and end_date %}
+                {{ start_date.strftime("%d/%m/%Y") }} - {{ end_date.strftime("%d/%m/%Y") }}
+                {% else %}
+                Semaine en cours
+                {% endif %}
+            </span>
+            <a href="/calendar?week={{ next_week }}" class="btn btn-secondary">Semaine suivante →</a>
+        </div>
+    </div>
+    
+    <div class="calendar-grid">
+        {% set days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"] %}
+        {% for day_index in range(7) %}
+        <div class="calendar-day">
+            <div class="day-header">
+                <h3>{{ days[day_index] }}</h3>
+                <span class="day-date">
+                    {% if week_dates and week_dates[day_index] %}
+                    {{ week_dates[day_index].strftime("%d/%m") }}
+                    {% else %}
+                    --
+                    {% endif %}
+                </span>
+            </div>
+            <div class="day-events">
+                {% for event in days_events[day_index] %}
+                <div class="event-card {% if event.user_id == current_user_id %}event-own{% else %}event-other{% endif %}">
+                    <div class="event-title">{{ event.title }}</div>
+                    <div class="event-time">
+                        {{ event.start_datetime[:16] }} - {{ event.end_datetime[:16] }}
+                    </div>
+                    <div class="event-owner">
+                        👤 {{ users_dict.get(event.user_id, "Utilisateur inconnu") }}
+                    </div>
+                    {% if event.description %}
+                    <div class="event-description">{{ event.description }}</div>
+                    {% endif %}
+                    {% if event.user_id == current_user_id %}
+                    <div class="event-actions">
+                        <button class="btn btn-small btn-warning" onclick="editEvent({{ event.id }})">Modifier</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteEvent({{ event.id }})">Supprimer</button>
+                    </div>
+                    {% else %}
+                    <div class="event-note">Lecture seule</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+function editEvent(eventId) {
+    // TODO: Implémenter l'édition d'événement
+    alert("Édition de l'événement " + eventId);
+}
+
+function deleteEvent(eventId) {
+    if (confirm("Êtes-vous sûr de vouloir supprimer cet événement ?")) {
+        // TODO: Implémenter la suppression via HTMX
+        alert("Suppression de l'événement " + eventId);
+    }
+}
+</script>
+{% endblock %}
+
