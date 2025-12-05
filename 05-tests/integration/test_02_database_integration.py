@@ -3,7 +3,18 @@
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from db_models import User, Event
+
+import sys
+from pathlib import Path
+
+# On remonte jusqu'à la racine du projet
+ROOT_DIR = Path(__file__).resolve().parents[2]  # fullstack-data-application/
+API_DIR = ROOT_DIR / "01-api"
+
+if str(API_DIR) not in sys.path:
+    sys.path.insert(0, str(API_DIR))
+
+from models import User, Event  # noqa: E402
 
 
 def test_tables_exist(engine):

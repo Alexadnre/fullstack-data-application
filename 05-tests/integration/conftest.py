@@ -5,7 +5,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 
-from db_models import Base, User, Event
 
 # Charger les variables d'environnement du .env
 load_dotenv()

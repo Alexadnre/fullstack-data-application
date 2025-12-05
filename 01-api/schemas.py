@@ -1,8 +1,7 @@
 # 01-api/schemas.py
 
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
-
+from pydantic import BaseModel, EmailStr,ConfigDict
 
 # ========== USERS ==========
 
@@ -21,9 +20,7 @@ class UserRead(UserBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True  # permet de renvoyer directement des objets SQLAlchemy
-
+    model_config = ConfigDict(from_attributes=True)
 
 # ========== AUTH ==========
 
@@ -65,5 +62,5 @@ class EventRead(EventBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+

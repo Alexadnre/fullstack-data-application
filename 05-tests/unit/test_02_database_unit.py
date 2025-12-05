@@ -6,8 +6,17 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from db_models import User, Event
+import sys
+from pathlib import Path
 
+# On remonte jusqu'à la racine du projet
+ROOT_DIR = Path(__file__).resolve().parents[2]  # fullstack-data-application/
+API_DIR = ROOT_DIR / "01-api"
+
+if str(API_DIR) not in sys.path:
+    sys.path.insert(0, str(API_DIR))
+
+from models import User, Event  # noqa: E402
 
 @pytest.mark.unit
 def test_create_user_ok(db_session: Session):
