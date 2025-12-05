@@ -12,7 +12,10 @@ from api_client import APIError
 from config import DEBUG
 
 # Configuration du logging
-logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG if DEBUG else logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Calendar WebApp")

@@ -16,6 +16,13 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "changeme")
 JWT_SECRET_ALGORITHM = os.getenv("JWT_SECRET_ALGORITHM", "HS256")
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
+# Log de la configuration au démarrage
+if DEBUG:
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger(__name__)
+    logger.debug(f"Configuration chargée: API_URL={API_URL}, DEBUG={DEBUG}")
+
 # Nom du cookie pour le token JWT
 AUTH_COOKIE_NAME = "access_token"
 

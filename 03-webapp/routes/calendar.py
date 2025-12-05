@@ -1,6 +1,7 @@
 # 03-webapp/routes/calendar.py
 
 import logging
+import traceback
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Query, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -8,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from dependencies import require_auth
 from api_client import api_call, APIError
+from config import DEBUG
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -58,9 +60,18 @@ async def calendar_week(
         # Récupérer tous les événements (lecture globale)
         token = request.cookies.get("access_token")
         if not token:
+            logger.error("Token manquant dans les cookies")
             raise HTTPException(status_code=401, detail="Token manquant")
         
-        events = await api_call("GET", "/events", token=token)
+        try:
+            events = await api_call("GET", "/events", token=token)
+        except APIError as api_err:
+            logger.error(f"Erreur API lors de la récupération des événements: {api_err.status_code} - {api_err.detail}")
+            # Si erreur API, on continue avec une liste vide plutôt que de planter
+            events = []
+        except Exception as e:
+            logger.exception(f"Erreur inattendue lors de l'appel API: {e}")
+            events = []
         
         # S'assurer que events est une liste
         if not isinstance(events, list):
@@ -121,15 +132,17 @@ async def calendar_week(
         week_dates = [(start_date + timedelta(days=i)) for i in range(7)]
         
         # Récupérer la liste des utilisateurs pour afficher les noms
+        users_dict = {}
         try:
             users = await api_call("GET", "/users", token=token)
             if isinstance(users, list):
                 users_dict = {u.get("id"): u.get("display_name", "Inconnu") for u in users}
             else:
-                users_dict = {}
+                logger.warning(f"Users n'est pas une liste: {type(users)}")
+        except APIError as e:
+            logger.warning(f"Erreur API lors de la récupération des utilisateurs: {e.status_code} - {e.detail}")
         except Exception as e:
             logger.warning(f"Erreur lors de la récupération des utilisateurs: {e}")
-            users_dict = {}
         
         return templates.TemplateResponse(
             "calendar/week.html",
@@ -165,8 +178,14 @@ async def calendar_week(
             },
             status_code=e.status_code,
         )
+    except HTTPException:
+        # Ré-élever les HTTPException telles quelles
+        raise
     except Exception as e:
         logger.exception(f"Erreur inattendue dans calendar: {e}")
-        # Ré-élever l'exception pour que le handler 500 la capture
-        raise HTTPException(status_code=500, detail=f"Erreur interne: {str(e)}")
+        # Ré-élever l'exception pour que le handler 500 la capture avec plus de détails
+        error_detail = str(e)
+        if DEBUG:
+            error_detail = f"{str(e)}\n\n{traceback.format_exc()}"
+        raise HTTPException(status_code=500, detail=f"Erreur interne: {error_detail}")
 
