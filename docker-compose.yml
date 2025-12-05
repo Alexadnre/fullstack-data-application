@@ -12,7 +12,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       TZ: ${TZ}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${DB_PORT_CONTAINER}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./02-database/calendar_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
@@ -29,7 +29,8 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL_PROD}
+      
     depends_on:
       - db
     ports:
