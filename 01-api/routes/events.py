@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
-from ..schemas.events import EventCreate, EventUpdate, EventOut
-from ..database import get_db
-from ..models import Event
+from schemas import EventCreate, EventUpdate, EventRead
+from database import get_db
+from models import Event
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/events", tags=["events"])
 # -------------------------
 # GET /events
 # -------------------------
-@router.get("/", response_model=list[EventOut])
+@router.get("/", response_model=list[EventRead])
 def get_events(db: Session = Depends(get_db)):
     events = db.query(Event).all()
     return events
@@ -20,7 +20,7 @@ def get_events(db: Session = Depends(get_db)):
 # -------------------------
 # GET /events/{id}
 # -------------------------
-@router.get("/{event_id}", response_model=EventOut)
+@router.get("/{event_id}", response_model=EventRead)
 def get_event(event_id: int, db: Session = Depends(get_db)):
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
@@ -31,7 +31,7 @@ def get_event(event_id: int, db: Session = Depends(get_db)):
 # -------------------------
 # POST /events
 # -------------------------
-@router.post("/", response_model=EventOut)
+@router.post("/", response_model=EventRead)
 def create_event(payload: EventCreate, db: Session = Depends(get_db)):
     event = Event(**payload.dict())
     db.add(event)
@@ -43,7 +43,7 @@ def create_event(payload: EventCreate, db: Session = Depends(get_db)):
 # -------------------------
 # PUT /events/{id}
 # -------------------------
-@router.put("/{event_id}", response_model=EventOut)
+@router.put("/{event_id}", response_model=EventRead)
 def update_event(event_id: int, payload: EventUpdate, db: Session = Depends(get_db)):
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
