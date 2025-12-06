@@ -2,3 +2,4 @@ requests
 streamlit
 pandas
 streamlit-calendar
+streamlit-cookies-manager
