@@ -12,14 +12,15 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       TZ: ${TZ}
     ports:
-      - "${DB_PORT_CONTAINER}:5432"
+      # Port vu depuis ta machine (host) → DB_PORT_LOCAL
+      - "${DB_PORT_LOCAL}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./02-database/calendar_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./02-database/calendar_seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
-
+      - ./02-database/calendar_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./02-database/calendar_seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
     restart: unless-stopped
-
+    networks:
+      - calendar_net
 
   api:
     build:
@@ -29,14 +30,36 @@ services:
     env_file:
       - .env
     environment:
+      # L’API utilisera l’URL prévue pour le conteneur
       DATABASE_URL: ${DATABASE_URL_PROD}
-      
     depends_on:
       - db
     ports:
-      - "8000:8000"
+      # Port vu depuis ta machine → API_PORT (8000 en .env)
+      - "${API_PORT}:8000"
     restart: unless-stopped
+    networks:
+      - calendar_net
 
+  webapp:
+    build:
+      context: ./03-webapp
+    container_name: calendar_webapp
+    env_file:
+      - .env
+    environment:
+      # URL de l’API vue depuis la webapp dans Docker
+      API_BASE_URL: ${WEBAPP_INTERNAL_API_URL}
+    depends_on:
+      - api
+    ports:
+      - "${WEBAPP_PORT}:8501"
+    restart: unless-stopped
+    networks:
+      - calendar_net
 
 volumes:
   postgres_data:
+
+networks:
+  calendar_net:

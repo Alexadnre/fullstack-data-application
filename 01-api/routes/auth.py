@@ -1,4 +1,4 @@
-# 01-api/api/auth.py
+# 01-api/routes/auth.py
 
 import sys
 from pathlib import Path
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User
-from schemas import UserCreate, UserRead, Token
+from schemas import UserCreate, UserRead, Token,LoginRequest
 
 # --- Import du module security depuis 04-authentication ---
 
@@ -46,17 +46,15 @@ def register_user(
 
     return user
 
-
 @router.post("/login", response_model=Token)
 def login(
-    email: str,
-    password: str,
+    payload: LoginRequest,
     db: Session = Depends(get_db),
 ):
-    stmt = select(User).where(User.email == email)
+    stmt = select(User).where(User.email == payload.email)
     user = db.execute(stmt).scalar_one_or_none()
 
-    if not user or not security.check_password(password, user.password_hash):
+    if not user or not security.check_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
