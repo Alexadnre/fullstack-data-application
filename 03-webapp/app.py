@@ -2,72 +2,22 @@ import os
 import requests
 import streamlit as st
 
-from streamlit_calendar import calendar as calendar_component
+from streamlit_calendar import calendar as calendar_component  # composant FullCalendar
 from streamlit_cookies_manager import EncryptedCookieManager
-
-
-# ===================== CONFIG =====================
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
-# Manager de cookies (doit être défini tout en haut du script)
+# ===================== COOKIES MANAGER =====================
+
 cookies = EncryptedCookieManager(
-    prefix="mon-agenda/",  # préfixe pour éviter les collisions
-    password=os.environ.get("COOKIES_PASSWORD", "CHANGE_THIS_SECRET"),
+    prefix="calendar_app",
+    # en prod, mets un vrai secret dans les variables d'env
+    password=os.environ.get("COOKIES_PASSWORD", "dev-secret"),
 )
 
-# Important : attendre que le composant soit prêt
+# Le composant cookies doit être prêt avant de continuer
 if not cookies.ready():
     st.stop()
-
-
-# ===================== UTILS AUTH =====================
-
-def init_auth_from_cookies():
-    """
-    Si un JWT est présent dans les cookies, on réhydrate la session Streamlit.
-    Appelé au début de main().
-    """
-    if st.session_state.get("logged_in"):
-        # Déjà connecté en mémoire, ne touche à rien
-        return
-
-    jwt = cookies.get("jwt_token")
-    token_type = cookies.get("token_type", "bearer")
-
-    if jwt:
-        st.session_state["jwt_token"] = jwt
-        st.session_state["token_type"] = token_type
-        st.session_state["logged_in"] = True
-    else:
-        st.session_state["logged_in"] = False
-
-
-def save_auth_to_cookies(access_token: str, token_type: str = "bearer"):
-    """
-    Sauvegarde le JWT dans les cookies + session_state.
-    """
-    st.session_state["jwt_token"] = access_token
-    st.session_state["token_type"] = token_type
-    st.session_state["logged_in"] = True
-
-    cookies["jwt_token"] = access_token
-    cookies["token_type"] = token_type
-    # On force la sauvegarde immédiate
-    cookies.save()
-
-
-def clear_auth():
-    """
-    Supprime l’auth côté session_state et cookies.
-    """
-    st.session_state.pop("jwt_token", None)
-    st.session_state.pop("token_type", None)
-    st.session_state["logged_in"] = False
-
-    cookies["jwt_token"] = ""
-    cookies["token_type"] = ""
-    cookies.save()
 
 
 # ===================== PAGE LOGIN =====================
@@ -103,27 +53,32 @@ def login_page():
                     st.write("Réponse brute :", data)
                     return
 
-                # Sauvegarde dans cookies + session_state
-                save_auth_to_cookies(access_token, token_type)
+                # Stockage en session
+                st.session_state["jwt_token"] = access_token
+                st.session_state["token_type"] = token_type
+                st.session_state["logged_in"] = True
 
-                st.success("Connexion réussie !")
+                # Stockage dans les cookies (persistance entre reloads)
+                cookies["jwt_token"] = access_token
+                cookies["token_type"] = token_type
+                cookies.save()
+
+                st.success("Connexion réussie ! Redirection...")
                 st.rerun()
-
             else:
                 st.error("Email ou mot de passe incorrect.")
                 try:
                     error_detail = response.json().get("detail", "Aucun détail fourni.")
-                    st.error(f"Erreur API ({response.status_code}) : {error_detail}")
+                    st.error(f"Erreur API ({response.status_code}): {error_detail}")
                 except Exception:
                     st.error(
-                        f"Erreur API : {response.status_code}. "
-                        f"(Vérifiez la réponse du serveur)"
+                        f"Erreur API: {response.status_code}. (Vérifiez la réponse du serveur)"
                     )
 
         except requests.exceptions.ConnectionError:
-            st.error(f"Impossible de se connecter à l'API à l'adresse : {API_BASE_URL}")
+            st.error(f"Impossible de se connecter à l'API à l'adresse: {API_BASE_URL}")
         except Exception as e:
-            st.error(f"Une erreur inattendue est survenue : {e}")
+            st.error(f"Une erreur inattendue est survenue: {e}")
 
 
 # ===================== PAGE CALENDRIER =====================
@@ -140,12 +95,27 @@ def events_page():
 
     # Bouton de déconnexion
     if st.button("Déconnexion"):
-        clear_auth()
+        # Nettoyage session
+        st.session_state.pop("jwt_token", None)
+        st.session_state.pop("token_type", None)
+        st.session_state["logged_in"] = False
+
+        # Nettoyage cookies
+        cookies["jwt_token"] = ""
+        cookies["token_type"] = ""
+        cookies.save()
+
         st.rerun()
 
     if not token:
         st.warning("Aucun token trouvé, veuillez vous reconnecter.")
-        clear_auth()
+        st.session_state["logged_in"] = False
+
+        # Nettoyage cookies au cas où
+        cookies["jwt_token"] = ""
+        cookies["token_type"] = ""
+        cookies.save()
+
         st.rerun()
         return
 
@@ -177,18 +147,18 @@ def events_page():
 
             # Options FullCalendar pour une vue semaine avec créneaux 30 min
             calendar_options = {
-                "initialView": "timeGridWeek",
-                "slotDuration": "00:30:00",
-                "slotMinTime": "06:00:00",
-                "slotMaxTime": "22:00:00",
+                "initialView": "timeGridWeek",         # vue semaine en colonnes
+                "slotDuration": "00:30:00",            # créneaux de 30 minutes
+                "slotMinTime": "06:00:00",             # première ligne
+                "slotMaxTime": "22:00:00",             # dernière ligne
                 "allDaySlot": False,
                 "nowIndicator": True,
                 "locale": "fr",
-                "firstDay": 1,  # 1 = lundi
+                "firstDay": 1,                         # 1 = lundi
                 "headerToolbar": {
                     "left": "today prev,next",
                     "center": "title",
-                    "right": "",
+                    "right": "",                       # pas de switch de vue
                 },
             }
 
@@ -201,22 +171,37 @@ def events_page():
 
             st.write("Vue hebdomadaire (style Agenda) :")
 
-            calendar_component(
+            # Affiche le composant calendrier et récupère les interactions
+            calendar_state = calendar_component(
                 events=calendar_events,
                 options=calendar_options,
                 custom_css=custom_css,
                 key="calendar",
             )
 
+            # Affiche le nom de l'événement cliqué sous le calendrier
+            if calendar_state and calendar_state.get("callback") == "eventClick":
+                try:
+                    clicked_event = calendar_state["eventClick"]["event"]
+                    clicked_title = clicked_event.get("title", "")
+                    if clicked_title:
+                        st.markdown(f"**Événement sélectionné :** {clicked_title}")
+                except Exception:
+                    # Si jamais la structure n'est pas celle attendue, on ignore
+                    pass
+
         elif response.status_code == 401:
             st.warning("Session expirée ou non autorisée. Veuillez vous reconnecter.")
-            clear_auth()
-            st.rerun()
+            st.session_state["logged_in"] = False
 
+            cookies["jwt_token"] = ""
+            cookies["token_type"] = ""
+            cookies.save()
+
+            st.rerun()
         else:
             st.error(
-                f"Erreur lors de la récupération des événements "
-                f"(Code : {response.status_code})"
+                f"Erreur lors de la récupération des événements (Code: {response.status_code})"
             )
             try:
                 st.write(response.json())
@@ -225,22 +210,26 @@ def events_page():
 
     except requests.exceptions.ConnectionError:
         st.error(
-            f"Erreur de connexion à l'API : {API_BASE_URL}. "
-            "Vérifiez que votre service 'api' est bien démarré."
+            f"Erreur de connexion à l'API: {API_BASE_URL}. Vérifiez que votre service 'api' est bien démarré."
         )
     except Exception as e:
-        st.error(f"Une erreur inattendue est survenue : {e}")
+        st.error(f"Une erreur inattendue est survenue: {e}")
 
 
 # ===================== MAIN =====================
 
 def main():
-    # Init du flag logged_in si absent
+    # Au premier passage, on synchronise la session avec les cookies
     if "logged_in" not in st.session_state:
-        st.session_state["logged_in"] = False
+        jwt_from_cookie = cookies.get("jwt_token")
+        token_type_from_cookie = cookies.get("token_type", "bearer")
 
-    # Essaye de recharger l'auth depuis les cookies
-    init_auth_from_cookies()
+        if jwt_from_cookie:
+            st.session_state["jwt_token"] = jwt_from_cookie
+            st.session_state["token_type"] = token_type_from_cookie
+            st.session_state["logged_in"] = True
+        else:
+            st.session_state["logged_in"] = False
 
     if st.session_state["logged_in"]:
         events_page()
