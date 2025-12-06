@@ -1,9 +1,19 @@
 from fastapi import APIRouter, HTTPException, Depends
+import sys
+from pathlib import Path
+
+# Assure l'accès au module d'authentification (même technique que dans `auth.py`)
+ROOT_DIR = Path(__file__).resolve().parents[2]
+AUTH_DIR = ROOT_DIR / "04-authentication"
+if str(AUTH_DIR) not in sys.path:
+    sys.path.insert(0, str(AUTH_DIR))
+
+import security  # noqa: E402  # get_current_user
 from sqlalchemy.orm import Session
 
 from schemas import EventCreate, EventUpdate, EventRead
 from database import get_db
-from models import Event
+from models import Event, User
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -12,8 +22,9 @@ router = APIRouter(prefix="/events", tags=["events"])
 # GET /events
 # -------------------------
 @router.get("/", response_model=list[EventRead])
-def get_events(db: Session = Depends(get_db)):
-    events = db.query(Event).all()
+def get_events(db: Session = Depends(get_db), current_user: User = Depends(security.get_current_user)):
+    """Retourne uniquement les événements appartenant à l'utilisateur courant."""
+    events = db.query(Event).filter(Event.user_id == current_user.id).all()
     return events
 
 

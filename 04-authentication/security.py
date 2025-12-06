@@ -5,7 +5,12 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Header, Depends
+from sqlalchemy.orm import Session
+
+# Import du module database/models (utilisé par la dépendance get_current_user)
+from database import get_db
+from models import User
 
 
 # ============================================================
@@ -123,3 +128,21 @@ def verify_authorization_header(access_token: str) -> dict:
     token = access_token.split("Bearer ")[1]
     payload = decode_jwt(token)
     return payload
+
+
+def get_current_user(authorization: str = Header(None, alias="Authorization"), db: Session = Depends(get_db)) -> User:
+    """
+    Dépendance FastAPI qui récupère l'utilisateur courant depuis le header
+    Authorization: Bearer <token> et le DB session.
+    Renvoie une instance `User` ou lève HTTPException 401.
+    """
+    payload = verify_authorization_header(authorization)
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    return user
