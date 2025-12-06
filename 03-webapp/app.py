@@ -1,6 +1,7 @@
 import os
 import requests
 import streamlit as st
+
 from datetime import datetime, date, time
 
 from streamlit_calendar import calendar as calendar_component  # composant FullCalendar
@@ -56,6 +57,26 @@ def clear_auth():
     st.session_state.pop("jwt_token", None)
     st.session_state.pop("token_type", None)
     st.session_state["logged_in"] = False
+
+
+# ===================== UTILITAIRES =====================
+
+def parse_iso_to_date_time(iso_str: str):
+    """
+    Transforme une chaîne ISO 8601 en (date, time) pour Streamlit.
+    Si échec, renvoie (today, 09:00).
+    Gère un éventuel suffixe 'Z'.
+    """
+    if not iso_str:
+        return date.today(), time(9, 0)
+
+    try:
+        iso_str = iso_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(iso_str)
+        # On enlève les microsecondes, ça ne sert à rien ici
+        return dt.date(), dt.time().replace(microsecond=0)
+    except Exception:
+        return date.today(), time(9, 0)
 
 
 # ===================== PAGE LOGIN =====================
@@ -119,6 +140,7 @@ def events_page():
     Page d'affichage des événements protégée par le JWT.
     Vue type Google Calendar : semaine / créneaux de 30 minutes.
     Permet d'éditer / supprimer un événement en cliquant dessus.
+    Édition via : jour + heure début + heure fin (plus de toggle 'jour complet').
     """
     st.title("Mon agenda")
 
@@ -129,10 +151,12 @@ def events_page():
     # Récup du token depuis les cookies
     token, token_type = get_auth_from_storage()
 
-    # Bouton de déconnexion
-    if st.button("Déconnexion"):
-        clear_auth()
-        st.rerun()
+    # Ligne avec bouton de déconnexion
+    col_left_header, col_right_header = st.columns([1, 3])
+    with col_left_header:
+        if st.button("Déconnexion"):
+            clear_auth()
+            st.rerun()
 
     if not token:
         st.warning("Aucun token trouvé, veuillez vous reconnecter.")
@@ -170,8 +194,8 @@ def events_page():
             calendar_options = {
                 "initialView": "timeGridWeek",         # vue semaine en colonnes
                 "slotDuration": "00:30:00",            # créneaux de 30 minutes
-                "slotMinTime": "06:00:00",             # première ligne
-                "slotMaxTime": "22:00:00",             # dernière ligne
+                "slotMinTime": "08:00:00",             # première ligne
+                "slotMaxTime": "20:00:00",             # dernière ligne
                 "allDaySlot": False,
                 "nowIndicator": True,
                 "locale": "fr",
@@ -190,17 +214,26 @@ def events_page():
                 }
             """
 
-            st.write("Vue hebdomadaire :")
+            # Layout : colonne gauche = édition, colonne droite = calendrier
+            col_right,col_left = st.columns([2, 1])
 
-            # Affiche le composant calendrier + récupère les interactions
-            cal_state = calendar_component(
-                events=calendar_events,
-                options=calendar_options,
-                custom_css=custom_css,
-                key="calendar",
-            )
+
+            # ===================== CALENDRIER (DROITE) =====================
+            with col_right:
+                st.write("Vue hebdomadaire :")
+                cal_state = calendar_component(
+                    events=calendar_events,
+                    options=calendar_options,
+                    custom_css=custom_css,
+                    key="calendar",
+                )
 
             # ===================== GESTION DU CLIC SUR ÉVÈNEMENT =====================
+            # cal_state ressemble à :
+            # {
+            #   "callback": "eventClick",
+            #   "eventClick": { "event": { ... }, "view": { ... } }
+            # }
             if cal_state and cal_state.get("callback") == "eventClick":
                 ev = cal_state["eventClick"]["event"]
                 selected_event = {
@@ -212,124 +245,125 @@ def events_page():
                 }
                 st.session_state["selected_event"] = selected_event
 
-            # ===================== FORMULAIRE D'ÉDITION / SUPPRESSION =====================
             selected_event = st.session_state.get("selected_event")
 
-            def parse_datetime_or_none(value: str):
-                if not value:
-                    return None
-                try:
-                    return datetime.fromisoformat(value)
-                except Exception:
-                    return None
+            # ===================== FORMULAIRE D'ÉDITION / SUPPRESSION (GAUCHE) =====================
+            with col_left:
+                # Aucun formulaire tant qu'aucun événement n'a été cliqué
+                if selected_event:
+                    if not selected_event.get("id"):
+                        st.error(
+                            "Impossible de récupérer l'ID de l'évènement, édition désactivée."
+                        )
+                    else:
+                        st.subheader("Éditer / supprimer l'évènement sélectionné")
 
-            if selected_event:
-                if not selected_event.get("id"):
-                    st.error(
-                        "Impossible de récupérer l'ID de l'évènement, édition désactivée."
-                    )
-                else:
-                    st.subheader("Éditer / supprimer l'évènement sélectionné")
-
-                    # Parsing des dates/horaires existants
-                    start_dt = parse_datetime_or_none(selected_event.get("start", ""))
-                    end_dt = parse_datetime_or_none(selected_event.get("end", ""))
-
-                    default_date = start_dt.date() if start_dt else date.today()
-                    default_start_time = start_dt.time() if start_dt else time(9, 0)
-                    default_end_time = end_dt.time() if end_dt else time(10, 0)
-
-                    with st.form("edit_event_form"):
-                        title_input = st.text_input(
-                            "Titre",
-                            value=selected_event.get("title", ""),
+                        # Parsing de la date / heure à partir des champs ISO
+                        start_date_default, start_time_default = parse_iso_to_date_time(
+                            selected_event.get("start", "")
+                        )
+                        # On récupère uniquement l'heure pour la fin
+                        _, end_time_default = parse_iso_to_date_time(
+                            selected_event.get("end", "")
                         )
 
-                        col_date, col_start, col_end = st.columns(3)
+                        with st.form("edit_event_form"):
+                            title_input = st.text_input(
+                                "Titre",
+                                value=selected_event.get("title", ""),
+                            )
 
-                        with col_date:
-                            event_date = st.date_input(
+                            # Jour
+                            day_input = st.date_input(
                                 "Jour",
-                                value=default_date,
-                            )
-                        with col_start:
-                            start_time_input = st.time_input(
-                                "Heure de début",
-                                value=default_start_time,
-                            )
-                        with col_end:
-                            end_time_input = st.time_input(
-                                "Heure de fin",
-                                value=default_end_time,
+                                value=start_date_default,
                             )
 
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            submit_update = st.form_submit_button("Mettre à jour")
-                        with col2:
-                            submit_delete = st.form_submit_button("Supprimer")
+                            # Heures début / fin
+                            col_t1, col_t2 = st.columns(2)
+                            with col_t1:
+                                start_time_input = st.time_input(
+                                    "Heure de début",
+                                    value=start_time_default,
+                                    step=900,  # 15 min
+                                )
+                            with col_t2:
+                                end_time_input = st.time_input(
+                                    "Heure de fin",
+                                    value=end_time_default,
+                                    step=900,
+                                )
 
-                    event_id = selected_event["id"]
+                            col_b1, col_b2 = st.columns(2)
+                            with col_b1:
+                                submit_update = st.form_submit_button("Mettre à jour")
+                            with col_b2:
+                                submit_delete = st.form_submit_button("Supprimer")
 
-                    # ----- UPDATE -----
-                    if submit_update:
-                        try:
-                            start_combined = datetime.combine(
-                                event_date, start_time_input
-                            )
-                            end_combined = datetime.combine(
-                                event_date, end_time_input
-                            )
+                        event_id = selected_event["id"]
 
-                            update_resp = requests.put(
-                                f"{API_BASE_URL}/events/{event_id}",
-                                headers=headers,
-                                json={
-                                    "title": title_input,
-                                    "start_datetime": start_combined.isoformat(),
-                                    "end_datetime": end_combined.isoformat(),
-                                    # plus d'option "all_day"
-                                },
-                            )
-                            if update_resp.status_code in (200, 204):
-                                st.success("Évènement mis à jour.")
-                                # On force le refresh des données
-                                st.session_state["selected_event"] = None
-                                st.rerun()
+                        # ----- UPDATE -----
+                        if submit_update:
+                            # Reconstruction des datetimes à partir de jour + heures
+                            start_dt = datetime.combine(day_input, start_time_input)
+                            end_dt = datetime.combine(day_input, end_time_input)
+
+                            # Vérification stricte : début < fin
+                            if start_dt >= end_dt:
+                                st.error(
+                                    "L'heure de début doit être strictement avant l'heure de fin."
+                                )
                             else:
                                 try:
-                                    err = update_resp.json()
-                                except Exception:
-                                    err = update_resp.text
-                                st.error(
-                                    f"Échec de la mise à jour (code {update_resp.status_code})"
-                                )
-                                st.write(err)
-                        except Exception as e:
-                            st.error(f"Erreur lors de la mise à jour : {e}")
+                                    update_resp = requests.put(
+                                        f"{API_BASE_URL}/events/{event_id}",
+                                        headers=headers,
+                                        json={
+                                            "title": title_input,
+                                            "start_datetime": start_dt.isoformat(),
+                                            "end_datetime": end_dt.isoformat(),
+                                            # plus de champ all_day dans l'édition
+                                        },
+                                    )
+                                    if update_resp.status_code in (200, 204):
+                                        st.success("Évènement mis à jour.")
+                                        # On force le refresh des données
+                                        st.session_state["selected_event"] = None
+                                        st.rerun()
+                                    else:
+                                        try:
+                                            err = update_resp.json()
+                                        except Exception:
+                                            err = update_resp.text
+                                        st.error(
+                                            f"Échec de la mise à jour (code {update_resp.status_code})"
+                                        )
+                                        st.write(err)
+                                except Exception as e:
+                                    st.error(f"Erreur lors de la mise à jour : {e}")
 
-                    # ----- DELETE -----
-                    if submit_delete:
-                        try:
-                            delete_resp = requests.delete(
-                                f"{API_BASE_URL}/events/{event_id}",
-                                headers=headers,
-                            )
-                            if delete_resp.status_code in (200, 204):
-                                st.success("Évènement supprimé.")
-                                st.session_state["selected_event"] = None
-                                st.rerun()
-                            else:
-                                try:
-                                    err = delete_resp.json()
-                                except Exception:
-                                    err = delete_resp.text
-                                st.error(
-                                    f"Échec de la suppression (code {delete_resp.status_code})"
+                        # ----- DELETE -----
+                        if submit_delete:
+                            try:
+                                delete_resp = requests.delete(
+                                    f"{API_BASE_URL}/events/{event_id}",
+                                    headers=headers,
                                 )
-                                st.write(err)
-                        except Exception as e:
-                            st.error(f"Erreur lors de la suppression : {e}")
+                                if delete_resp.status_code in (200, 204):
+                                    st.success("Évènement supprimé.")
+                                    st.session_state["selected_event"] = None
+                                    st.rerun()
+                                else:
+                                    try:
+                                        err = delete_resp.json()
+                                    except Exception:
+                                        err = delete_resp.text
+                                    st.error(
+                                        f"Échec de la suppression (code {delete_resp.status_code})"
+                                    )
+                                    st.write(err)
+                            except Exception as e:
+                                st.error(f"Erreur lors de la suppression : {e}")
 
         elif response.status_code == 401:
             st.warning("Session expirée ou non autorisée. Veuillez vous reconnecter.")
