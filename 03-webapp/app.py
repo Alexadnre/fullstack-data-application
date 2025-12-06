@@ -1,23 +1,61 @@
 import os
 import requests
 import streamlit as st
+from datetime import datetime, date, time
 
 from streamlit_calendar import calendar as calendar_component  # composant FullCalendar
 from streamlit_cookies_manager import EncryptedCookieManager
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
-# ===================== COOKIES MANAGER =====================
+# ===================== COOKIES (JWT PERSISTANT) =====================
 
+# ⚠️ change bien COOKIES_PASSWORD en variable d'env en prod
 cookies = EncryptedCookieManager(
-    prefix="calendar_app",
-    # en prod, mets un vrai secret dans les variables d'env
-    password=os.environ.get("COOKIES_PASSWORD", "dev-secret"),
+    prefix="mon-app-calendrier/",
+    password=os.environ.get("COOKIES_PASSWORD", "CHANGE-ME"),
 )
 
-# Le composant cookies doit être prêt avant de continuer
+# On attend que le composant cookies soit prêt
 if not cookies.ready():
     st.stop()
+
+
+def get_auth_from_storage():
+    """
+    Récupère le token / type depuis les cookies.
+    """
+    token = cookies.get("jwt_token")
+    token_type = cookies.get("token_type") or "bearer"
+    return token, token_type
+
+
+def set_auth_in_storage(token: str, token_type: str = "bearer"):
+    """
+    Sauvegarde le token en cookie + met à jour la session.
+    """
+    cookies["jwt_token"] = token
+    cookies["token_type"] = token_type
+    cookies.save()
+
+    st.session_state["jwt_token"] = token
+    st.session_state["token_type"] = token_type
+    st.session_state["logged_in"] = True
+
+
+def clear_auth():
+    """
+    Supprime le token (cookies + session).
+    """
+    if "jwt_token" in cookies:
+        del cookies["jwt_token"]
+    if "token_type" in cookies:
+        del cookies["token_type"]
+    cookies.save()
+
+    st.session_state.pop("jwt_token", None)
+    st.session_state.pop("token_type", None)
+    st.session_state["logged_in"] = False
 
 
 # ===================== PAGE LOGIN =====================
@@ -53,23 +91,16 @@ def login_page():
                     st.write("Réponse brute :", data)
                     return
 
-                # Stockage en session
-                st.session_state["jwt_token"] = access_token
-                st.session_state["token_type"] = token_type
-                st.session_state["logged_in"] = True
+                # Sauvegarde dans cookies + session
+                set_auth_in_storage(access_token, token_type)
 
-                # Stockage dans les cookies (persistance entre reloads)
-                cookies["jwt_token"] = access_token
-                cookies["token_type"] = token_type
-                cookies.save()
-
-                st.success("Connexion réussie ! Redirection...")
+                st.success("Connexion réussie !")
                 st.rerun()
             else:
                 st.error("Email ou mot de passe incorrect.")
                 try:
                     error_detail = response.json().get("detail", "Aucun détail fourni.")
-                    st.error(f"Erreur API ({response.status_code}): {error_detail}")
+                    st.error(f"Erreur API ({response.status_code}) : {error_detail}")
                 except Exception:
                     st.error(
                         f"Erreur API: {response.status_code}. (Vérifiez la réponse du serveur)"
@@ -87,35 +118,25 @@ def events_page():
     """
     Page d'affichage des événements protégée par le JWT.
     Vue type Google Calendar : semaine / créneaux de 30 minutes.
+    Permet d'éditer / supprimer un événement en cliquant dessus.
     """
     st.title("Mon agenda")
 
-    token = st.session_state.get("jwt_token")
-    token_type = st.session_state.get("token_type", "bearer")
+    # Init état pour l'évènement sélectionné
+    if "selected_event" not in st.session_state:
+        st.session_state["selected_event"] = None
+
+    # Récup du token depuis les cookies
+    token, token_type = get_auth_from_storage()
 
     # Bouton de déconnexion
     if st.button("Déconnexion"):
-        # Nettoyage session
-        st.session_state.pop("jwt_token", None)
-        st.session_state.pop("token_type", None)
-        st.session_state["logged_in"] = False
-
-        # Nettoyage cookies
-        cookies["jwt_token"] = ""
-        cookies["token_type"] = ""
-        cookies.save()
-
+        clear_auth()
         st.rerun()
 
     if not token:
         st.warning("Aucun token trouvé, veuillez vous reconnecter.")
         st.session_state["logged_in"] = False
-
-        # Nettoyage cookies au cas où
-        cookies["jwt_token"] = ""
-        cookies["token_type"] = ""
-        cookies.save()
-
         st.rerun()
         return
 
@@ -169,35 +190,150 @@ def events_page():
                 }
             """
 
-            st.write("Vue hebdomadaire (style Agenda) :")
+            st.write("Vue hebdomadaire :")
 
-            # Affiche le composant calendrier et récupère les interactions
-            calendar_state = calendar_component(
+            # Affiche le composant calendrier + récupère les interactions
+            cal_state = calendar_component(
                 events=calendar_events,
                 options=calendar_options,
                 custom_css=custom_css,
                 key="calendar",
             )
 
-            # Affiche le nom de l'événement cliqué sous le calendrier
-            if calendar_state and calendar_state.get("callback") == "eventClick":
+            # ===================== GESTION DU CLIC SUR ÉVÈNEMENT =====================
+            if cal_state and cal_state.get("callback") == "eventClick":
+                ev = cal_state["eventClick"]["event"]
+                selected_event = {
+                    "id": str(ev.get("id")) if ev.get("id") is not None else None,
+                    "title": ev.get("title", ""),
+                    "start": ev.get("start", ""),
+                    "end": ev.get("end", ""),
+                    "allDay": ev.get("allDay", False),
+                }
+                st.session_state["selected_event"] = selected_event
+
+            # ===================== FORMULAIRE D'ÉDITION / SUPPRESSION =====================
+            selected_event = st.session_state.get("selected_event")
+
+            def parse_datetime_or_none(value: str):
+                if not value:
+                    return None
                 try:
-                    clicked_event = calendar_state["eventClick"]["event"]
-                    clicked_title = clicked_event.get("title", "")
-                    if clicked_title:
-                        st.markdown(f"**Événement sélectionné :** {clicked_title}")
+                    return datetime.fromisoformat(value)
                 except Exception:
-                    # Si jamais la structure n'est pas celle attendue, on ignore
-                    pass
+                    return None
+
+            if selected_event:
+                if not selected_event.get("id"):
+                    st.error(
+                        "Impossible de récupérer l'ID de l'évènement, édition désactivée."
+                    )
+                else:
+                    st.subheader("Éditer / supprimer l'évènement sélectionné")
+
+                    # Parsing des dates/horaires existants
+                    start_dt = parse_datetime_or_none(selected_event.get("start", ""))
+                    end_dt = parse_datetime_or_none(selected_event.get("end", ""))
+
+                    default_date = start_dt.date() if start_dt else date.today()
+                    default_start_time = start_dt.time() if start_dt else time(9, 0)
+                    default_end_time = end_dt.time() if end_dt else time(10, 0)
+
+                    with st.form("edit_event_form"):
+                        title_input = st.text_input(
+                            "Titre",
+                            value=selected_event.get("title", ""),
+                        )
+
+                        col_date, col_start, col_end = st.columns(3)
+
+                        with col_date:
+                            event_date = st.date_input(
+                                "Jour",
+                                value=default_date,
+                            )
+                        with col_start:
+                            start_time_input = st.time_input(
+                                "Heure de début",
+                                value=default_start_time,
+                            )
+                        with col_end:
+                            end_time_input = st.time_input(
+                                "Heure de fin",
+                                value=default_end_time,
+                            )
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            submit_update = st.form_submit_button("Mettre à jour")
+                        with col2:
+                            submit_delete = st.form_submit_button("Supprimer")
+
+                    event_id = selected_event["id"]
+
+                    # ----- UPDATE -----
+                    if submit_update:
+                        try:
+                            start_combined = datetime.combine(
+                                event_date, start_time_input
+                            )
+                            end_combined = datetime.combine(
+                                event_date, end_time_input
+                            )
+
+                            update_resp = requests.put(
+                                f"{API_BASE_URL}/events/{event_id}",
+                                headers=headers,
+                                json={
+                                    "title": title_input,
+                                    "start_datetime": start_combined.isoformat(),
+                                    "end_datetime": end_combined.isoformat(),
+                                    # plus d'option "all_day"
+                                },
+                            )
+                            if update_resp.status_code in (200, 204):
+                                st.success("Évènement mis à jour.")
+                                # On force le refresh des données
+                                st.session_state["selected_event"] = None
+                                st.rerun()
+                            else:
+                                try:
+                                    err = update_resp.json()
+                                except Exception:
+                                    err = update_resp.text
+                                st.error(
+                                    f"Échec de la mise à jour (code {update_resp.status_code})"
+                                )
+                                st.write(err)
+                        except Exception as e:
+                            st.error(f"Erreur lors de la mise à jour : {e}")
+
+                    # ----- DELETE -----
+                    if submit_delete:
+                        try:
+                            delete_resp = requests.delete(
+                                f"{API_BASE_URL}/events/{event_id}",
+                                headers=headers,
+                            )
+                            if delete_resp.status_code in (200, 204):
+                                st.success("Évènement supprimé.")
+                                st.session_state["selected_event"] = None
+                                st.rerun()
+                            else:
+                                try:
+                                    err = delete_resp.json()
+                                except Exception:
+                                    err = delete_resp.text
+                                st.error(
+                                    f"Échec de la suppression (code {delete_resp.status_code})"
+                                )
+                                st.write(err)
+                        except Exception as e:
+                            st.error(f"Erreur lors de la suppression : {e}")
 
         elif response.status_code == 401:
             st.warning("Session expirée ou non autorisée. Veuillez vous reconnecter.")
-            st.session_state["logged_in"] = False
-
-            cookies["jwt_token"] = ""
-            cookies["token_type"] = ""
-            cookies.save()
-
+            clear_auth()
             st.rerun()
         else:
             st.error(
@@ -210,7 +346,8 @@ def events_page():
 
     except requests.exceptions.ConnectionError:
         st.error(
-            f"Erreur de connexion à l'API: {API_BASE_URL}. Vérifiez que votre service 'api' est bien démarré."
+            f"Erreur de connexion à l'API: {API_BASE_URL}. "
+            "Vérifiez que votre service 'api' est bien démarré."
         )
     except Exception as e:
         st.error(f"Une erreur inattendue est survenue: {e}")
@@ -219,15 +356,15 @@ def events_page():
 # ===================== MAIN =====================
 
 def main():
-    # Au premier passage, on synchronise la session avec les cookies
-    if "logged_in" not in st.session_state:
-        jwt_from_cookie = cookies.get("jwt_token")
-        token_type_from_cookie = cookies.get("token_type", "bearer")
+    st.set_page_config(page_title="Calendrier", layout="wide")
 
-        if jwt_from_cookie:
-            st.session_state["jwt_token"] = jwt_from_cookie
-            st.session_state["token_type"] = token_type_from_cookie
+    # Init état de connexion en fonction des cookies
+    if "logged_in" not in st.session_state:
+        token, token_type = get_auth_from_storage()
+        if token:
             st.session_state["logged_in"] = True
+            st.session_state["jwt_token"] = token
+            st.session_state["token_type"] = token_type
         else:
             st.session_state["logged_in"] = False
 
