@@ -1,18 +1,8 @@
--- ============================================================
--- Calendar Project - Seed Data
--- ============================================================
-
--- -------------------------
--- USERS
--- -------------------------
 INSERT INTO users (email, password_hash, display_name, timezone)
 VALUES
     ('alexandre.videlaine@edu.esiee.fr',  'hash_pw_1', 'Alexandre VIDELAINE', 'Europe/Paris'),
     ('antoine.ritz@edu.esiee.fr',    'hash_pw_2', 'Antoine RITZ',   'Europe/Paris');
 
--- -------------------------
--- EVENTS for Alexandre (user_id = 1)
--- -------------------------
 INSERT INTO events (
     user_id, title, description, start_datetime, end_datetime,
     all_day, location, rrule, status
@@ -41,9 +31,6 @@ VALUES
         'confirmed'
     );
 
--- -------------------------
--- EVENTS for Antoine (user_id = 2)
--- -------------------------
 INSERT INTO events (
     user_id, title, description, start_datetime, end_datetime,
     all_day, location, rrule, status
@@ -60,4 +47,3 @@ VALUES
         NULL,
         'confirmed'
     );
-

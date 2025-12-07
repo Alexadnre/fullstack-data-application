@@ -1,16 +1,8 @@
-# 05-tests/unit/test_04_authentication_security.py
-
 from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
 from fastapi import HTTPException
-
-
-# -------------------------------------------------------------------
-# Tests hash_password / check_password
-# -------------------------------------------------------------------
-
 
 def test_hash_password_format(auth_security, sample_password):
     """
@@ -23,9 +15,8 @@ def test_hash_password_format(auth_security, sample_password):
     assert len(parts) == 4
     assert parts[0] == "pbkdf2_sha256"
     assert parts[1].isdigit()
-    assert parts[2]  # salt non vide
-    assert parts[3]  # hash non vide
-
+    assert parts[2]
+    assert parts[3]
 
 def test_check_password_ok(auth_security, sample_password):
     """
@@ -34,7 +25,6 @@ def test_check_password_ok(auth_security, sample_password):
     hashed = auth_security.hash_password(sample_password)
     assert auth_security.check_password(sample_password, hashed) is True
 
-
 def test_check_password_wrong(auth_security, sample_password):
     """
     check_password doit retourner False avec un mauvais mot de passe.
@@ -42,19 +32,12 @@ def test_check_password_wrong(auth_security, sample_password):
     hashed = auth_security.hash_password(sample_password)
     assert auth_security.check_password("mauvais_mdp", hashed) is False
 
-
 def test_check_password_invalid_format_raises(auth_security):
     """
     check_password doit lever ValueError si le format du hash est invalide.
     """
     with pytest.raises(ValueError):
         auth_security.check_password("whatever", "format_invalide")
-
-
-# -------------------------------------------------------------------
-# Tests encode_jwt / decode_jwt
-# -------------------------------------------------------------------
-
 
 def test_encode_and_decode_jwt_ok(auth_security):
     """
@@ -67,7 +50,6 @@ def test_encode_and_decode_jwt_ok(auth_security):
     payload = auth_security.decode_jwt(token)
     assert payload.get("user_id") == user_id
     assert "exp" in payload
-
 
 def test_decode_jwt_expired_raises_http_exception(auth_security):
     """
@@ -94,7 +76,6 @@ def test_decode_jwt_expired_raises_http_exception(auth_security):
     assert exc.status_code == 401
     assert "Token expired" in exc.detail
 
-
 def test_decode_jwt_invalid_token_raises_http_exception(auth_security):
     """
     Un token totalement invalide doit lever HTTPException 401 'Invalid token.'.
@@ -108,12 +89,6 @@ def test_decode_jwt_invalid_token_raises_http_exception(auth_security):
     assert exc.status_code == 401
     assert "Invalid token" in exc.detail
 
-
-# -------------------------------------------------------------------
-# Tests verify_authorization_header
-# -------------------------------------------------------------------
-
-
 def test_verify_authorization_header_ok(auth_security):
     """
     Un header 'Bearer <token>' valide doit renvoyer le payload décodé.
@@ -125,13 +100,12 @@ def test_verify_authorization_header_ok(auth_security):
     payload = auth_security.verify_authorization_header(header)
     assert payload.get("user_id") == user_id
 
-
 def test_verify_authorization_header_missing_prefix_raises(auth_security):
     """
     Si le header ne commence pas par 'Bearer ', on doit avoir 401 'No auth provided.'.
     """
     token = auth_security.encode_jwt(user_id=1)
-    header = token  # pas de 'Bearer '
+    header = token
 
     with pytest.raises(HTTPException) as exc_info:
         auth_security.verify_authorization_header(header)
@@ -139,7 +113,6 @@ def test_verify_authorization_header_missing_prefix_raises(auth_security):
     exc = exc_info.value
     assert exc.status_code == 401
     assert "No auth provided" in exc.detail
-
 
 def test_verify_authorization_header_empty_raises(auth_security):
     """

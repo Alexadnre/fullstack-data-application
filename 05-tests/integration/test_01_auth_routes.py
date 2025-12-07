@@ -1,5 +1,3 @@
-# 05-tests/integration/test_01_auth_routes.py
-
 import sys
 from pathlib import Path
 
@@ -7,22 +5,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-# =====================================================================
-# Import de l'app FastAPI depuis 01-api/main.py
-# =====================================================================
-
-ROOT_DIR = Path(__file__).resolve().parents[2]  # fullstack-data-application/
+ROOT_DIR = Path(__file__).resolve().parents[2]
 API_DIR = ROOT_DIR / "01-api"
 
 if str(API_DIR) not in sys.path:
     sys.path.insert(0, str(API_DIR))
 
-from main import app  # noqa: E402
-
-
-# =====================================================================
-# Fixtures
-# =====================================================================
+from main import app
 
 @pytest.fixture(scope="session")
 def client():
@@ -33,7 +22,6 @@ def client():
     """
     with TestClient(app) as c:
         yield c
-
 
 @pytest.fixture(autouse=True)
 def clean_integration_data(engine):
@@ -52,19 +40,11 @@ def clean_integration_data(engine):
                 "WHERE email LIKE 'integration_%@test.com';"
             )
         )
-    # pas de yield : on fait juste du setup
-    # (si tu veux un cleanup après, tu peux ajouter du code après un yield)
-    
-
-# =====================================================================
-# Tests /health
-# =====================================================================
 
 def test_health_ok(client):
     resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
-
 
 def test_health_db_ok(client):
     resp = client.get("/health/db")
@@ -72,11 +52,6 @@ def test_health_db_ok(client):
     assert resp.status_code == 200
     assert data["status"] == "ok"
     assert data["database"] == "up"
-
-
-# =====================================================================
-# Tests /auth/register
-# =====================================================================
 
 def test_register_user_ok(client):
     payload = {
@@ -97,7 +72,6 @@ def test_register_user_ok(client):
     assert "password" not in data
     assert "password_hash" not in data
 
-
 def test_register_same_email_fails(client):
     payload = {
         "email": "integration_duplicate@test.com",
@@ -106,24 +80,17 @@ def test_register_same_email_fails(client):
         "timezone": "Europe/Paris",
     }
 
-    # 1er appel : OK
     r1 = client.post("/auth/register", json=payload)
     assert r1.status_code == 201
 
-    # 2e appel : même email → 400
     r2 = client.post("/auth/register", json=payload)
     assert r2.status_code == 400
 
     data = r2.json()
     assert "Email already registered" in data["detail"]
 
-
-# =====================================================================
-# Tests /auth/login
-# =====================================================================
-
 def test_login_success(client):
-    # On crée un user
+
     payload = {
         "email": "integration_login@test.com",
         "password": "MyIntegrationPwd",
@@ -133,7 +100,6 @@ def test_login_success(client):
     r_reg = client.post("/auth/register", json=payload)
     assert r_reg.status_code == 201
 
-    # Login avec les bons identifiants
     r_login = client.post(
         "/auth/login",
         params={
@@ -146,7 +112,6 @@ def test_login_success(client):
     data = r_login.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
-
 
 def test_login_wrong_password(client):
     payload = {
@@ -168,7 +133,6 @@ def test_login_wrong_password(client):
     assert r_login.status_code == 401
     data = r_login.json()
     assert "Incorrect email or password" in data["detail"]
-
 
 def test_login_unknown_email(client):
     r_login = client.post(

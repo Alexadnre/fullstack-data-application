@@ -1,5 +1,3 @@
-# 01-api/database.py
-
 import os
 from pathlib import Path
 
@@ -9,7 +7,6 @@ from sqlalchemy.orm import sessionmaker
 
 from models import Base
 
-# Charger le .env à la racine du projet
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT_DIR / ".env"
 load_dotenv(ENV_PATH)
@@ -26,7 +23,6 @@ SessionLocal = sessionmaker(
     autocommit=False,
     future=True,
 )
-
 
 def get_db():
     """

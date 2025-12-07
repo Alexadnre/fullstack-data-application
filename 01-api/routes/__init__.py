@@ -1,5 +1,3 @@
-# 01-api/api/__init__.py
-
-from . import auth, health, users, events, stats  # noqa
+from . import auth, health, users, events, stats
 
 __all__ = ["auth", "health", "users", "events", "stats"]

@@ -1,5 +1,3 @@
-# 05-tests/e2e/test_01_api_container.py
-
 import time
 
 import httpx
@@ -10,7 +8,6 @@ import os
 load_dotenv()
 
 API_BASE_URL = os.getenv("E2E_API_BASE_URL", "http://localhost:8000")
-
 
 @pytest.fixture(scope="session")
 def wait_for_api():
@@ -32,13 +29,11 @@ def wait_for_api():
 
     pytest.fail("API containerisée indisponible sur /health après 15s")
 
-
 @pytest.mark.e2e
 def test_container_health(wait_for_api):
     r = httpx.get(f"{API_BASE_URL}/health")
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}
-
 
 @pytest.mark.e2e
 def test_container_health_db(wait_for_api):

@@ -1,19 +1,13 @@
-# 01-api/schemas.py
-
 from datetime import datetime
 from pydantic import BaseModel, EmailStr,ConfigDict
-
-# ========== USERS ==========
 
 class UserBase(BaseModel):
     email: EmailStr
     display_name: str
     timezone: str | None = "Europe/Paris"
 
-
 class UserCreate(UserBase):
     password: str
-
 
 class UserRead(UserBase):
     id: int
@@ -22,8 +16,6 @@ class UserRead(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# ========== AUTH ==========
-
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -31,9 +23,6 @@ class Token(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-
-
-# ========== EVENTS ==========
 
 class EventBase(BaseModel):
     title: str
@@ -44,10 +33,8 @@ class EventBase(BaseModel):
     location: str | None = None
     rrule: str | None = None
 
-
 class EventCreate(EventBase):
     pass
-
 
 class EventUpdate(BaseModel):
     title: str | None = None
@@ -59,7 +46,6 @@ class EventUpdate(BaseModel):
     rrule: str | None = None
     status: str | None = None
 
-
 class EventRead(EventBase):
     id: int
     status: str
@@ -67,4 +53,3 @@ class EventRead(EventBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-

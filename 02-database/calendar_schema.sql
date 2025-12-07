@@ -1,14 +1,6 @@
--- ============================================================
--- Calendar Project - Schema Creation
--- ============================================================
-
--- Drop tables if they already exist (only for dev/debug)
 DROP TABLE IF EXISTS events CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
--- ============================================================
--- USERS TABLE
--- ============================================================
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -19,9 +11,6 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
--- EVENTS TABLE
--- ============================================================
 CREATE TABLE events (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -42,11 +31,7 @@ CREATE TABLE events (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
--- Trigger: update updated_at on row update
--- ============================================================
 
--- 1) Create the trigger function
 CREATE OR REPLACE FUNCTION update_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -55,7 +40,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 2) Attach the trigger to the events table
 CREATE TRIGGER trigger_update_events_timestamp
 BEFORE UPDATE ON events
 FOR EACH ROW

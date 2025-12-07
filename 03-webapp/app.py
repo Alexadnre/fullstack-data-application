@@ -4,23 +4,18 @@ import streamlit as st
 
 from datetime import datetime, date, time, timedelta
 
-from streamlit_calendar import calendar as calendar_component  # composant FullCalendar
+from streamlit_calendar import calendar as calendar_component
 from streamlit_cookies_manager import EncryptedCookieManager
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
-# ===================== COOKIES (JWT PERSISTANT) =====================
-
-# ⚠️ change bien COOKIES_PASSWORD en variable d'env en prod
 cookies = EncryptedCookieManager(
     prefix="mon-app-calendrier/",
     password=os.environ.get("COOKIES_PASSWORD", "CHANGE-ME"),
 )
 
-# On attend que le composant cookies soit prêt
 if not cookies.ready():
     st.stop()
-
 
 def get_auth_from_storage():
     """
@@ -29,7 +24,6 @@ def get_auth_from_storage():
     token = cookies.get("jwt_token")
     token_type = cookies.get("token_type") or "bearer"
     return token, token_type
-
 
 def set_auth_in_storage(token: str, token_type: str = "bearer"):
     """
@@ -42,7 +36,6 @@ def set_auth_in_storage(token: str, token_type: str = "bearer"):
     st.session_state["jwt_token"] = token
     st.session_state["token_type"] = token_type
     st.session_state["logged_in"] = True
-
 
 def clear_auth():
     """
@@ -58,9 +51,6 @@ def clear_auth():
     st.session_state.pop("token_type", None)
     st.session_state["logged_in"] = False
 
-
-# ===================== UTILITAIRES =====================
-
 def parse_iso_to_date_time(iso_str: str):
     """
     Transforme une chaîne ISO 8601 en (date, time) pour Streamlit.
@@ -73,13 +63,10 @@ def parse_iso_to_date_time(iso_str: str):
     try:
         iso_str = iso_str.replace("Z", "+00:00")
         dt = datetime.fromisoformat(iso_str)
-        # On enlève les microsecondes, ça ne sert à rien ici
+
         return dt.date(), dt.time().replace(microsecond=0)
     except Exception:
         return date.today(), time(9, 0)
-
-
-# ===================== PAGE LOGIN =====================
 
 def login_page():
     """
@@ -112,7 +99,6 @@ def login_page():
                     st.write("Réponse brute :", data)
                     return
 
-                # Sauvegarde dans cookies + session
                 set_auth_in_storage(access_token, token_type)
 
                 st.success("Connexion réussie !")
@@ -132,9 +118,6 @@ def login_page():
         except Exception as e:
             st.error(f"Une erreur inattendue est survenue: {e}")
 
-
-# ===================== PAGE CALENDRIER =====================
-
 def events_page():
     """
     Page d'affichage des événements protégée par le JWT.
@@ -144,18 +127,14 @@ def events_page():
     """
     st.title("Mon agenda")
 
-    # Init état pour l'évènement sélectionné
     if "selected_event" not in st.session_state:
         st.session_state["selected_event"] = None
 
-    # Pour éviter les doubles créations sur le même clic
     if "last_calendar_action" not in st.session_state:
         st.session_state["last_calendar_action"] = None
 
-    # Récup du token depuis les cookies
     token, token_type = get_auth_from_storage()
 
-    # Ligne avec bouton de déconnexion
     col_left_header, col_right_header = st.columns([1, 3])
     with col_left_header:
         if st.button("Déconnexion"):
@@ -172,7 +151,6 @@ def events_page():
         "Authorization": f"{token_type.capitalize()} {token}"
     }
 
-    # Cache des événements - invalidé manuellement après modif
     @st.cache_data(show_spinner=False)
     def fetch_events(auth_header: str):
         resp = requests.get(f"{API_BASE_URL}/events", headers={"Authorization": auth_header})
@@ -186,8 +164,6 @@ def events_page():
 
         if status_code == 200:
 
-            # Transforme les événements de l'API -> format FullCalendar
-            # Récupère l'ID de l'événement sélectionné pour le style visuel
             selected_event_data = st.session_state.get("selected_event", {})
             selected_id = selected_event_data.get("id") if selected_event_data else None
 
@@ -196,12 +172,11 @@ def events_page():
                 event_obj = {
                     "id": str(ev["id"]),
                     "title": ev["title"],
-                    "start": ev["start_datetime"],  # ISO8601
+                    "start": ev["start_datetime"],
                     "end": ev["end_datetime"],
                     "allDay": ev.get("all_day", False),
                 }
 
-                # Style de sélection : vert pour l'événement sélectionné, bleu par défaut
                 if str(ev["id"]) == selected_id:
                     event_obj["backgroundColor"] = "#22C55E"
                     event_obj["borderColor"] = "#16A34A"
@@ -212,7 +187,6 @@ def events_page():
 
                 calendar_events.append(event_obj)
 
-            # Options FullCalendar
             calendar_options = {
                 "initialView": "timeGridWeek",
                 "slotDuration": "00:30:00",
@@ -227,7 +201,7 @@ def events_page():
                     "center": "title",
                     "right": "",
                 },
-                # pas de sélection drag&drop pour éviter d'autres callbacks
+
                 "selectable": False,
                 "contentHeight": "auto",
             }
@@ -248,7 +222,6 @@ def events_page():
 
             col_right, col_left = st.columns([2, 1])
 
-            # ===================== CALENDRIER (DROITE) =====================
             with col_right:
                 st.write("Vue hebdomadaire :")
                 cal_state = calendar_component(
@@ -257,24 +230,20 @@ def events_page():
                     custom_css=custom_css,
                     key="calendar",
                 )
-                # st.write(cal_state)  # décommente pour debug si besoin
 
-            # ===================== GESTION DES CALLBACKS CALENDRIER =====================
             from datetime import datetime, timedelta
 
             if cal_state:
                 callback = cal_state.get("callback")
 
-                # ----- Création d'un évènement sur clic dans un créneau vide -----
                 if callback == "dateClick":
                     dc = cal_state.get("dateClick", {})
                     date_str = dc.get("date") or dc.get("dateStr")
 
                     if date_str:
-                        # ID unique pour ce clic
+
                         action_id = f"dateClick:{date_str}"
 
-                        # Si on a déjà traité ce clic, on ne refait rien
                         if st.session_state["last_calendar_action"] != action_id:
                             st.session_state["last_calendar_action"] = action_id
 
@@ -297,7 +266,7 @@ def events_page():
 
                                 if create_resp.status_code in (200, 201):
                                     st.success("Évènement créé.")
-                                    # Sélectionner automatiquement le nouvel événement
+
                                     new_event = create_resp.json()
                                     st.session_state["selected_event"] = {
                                         "id": str(new_event["id"]),
@@ -306,7 +275,7 @@ def events_page():
                                         "end": new_event["end_datetime"],
                                         "allDay": new_event.get("all_day", False),
                                     }
-                                    fetch_events.clear()  # Invalider cache pour voir le nouvel event
+                                    fetch_events.clear()
                                     st.rerun()
                                 else:
                                     try:
@@ -320,14 +289,12 @@ def events_page():
                             except Exception as e:
                                 st.error(f"Erreur lors de la création de l'évènement : {e}")
 
-                # ----- Clic sur un évènement existant : on charge pour édition -----
                 if callback == "eventClick":
                     ev = cal_state["eventClick"]["event"]
                     new_id = str(ev.get("id")) if ev.get("id") is not None else None
                     current = st.session_state.get("selected_event", {})
                     current_id = current.get("id") if current else None
 
-                    # Ne rerun que si sélection différente (évite boucle infinie)
                     if new_id != current_id:
                         st.session_state["selected_event"] = {
                             "id": new_id,
@@ -336,11 +303,10 @@ def events_page():
                             "end": ev.get("end", ""),
                             "allDay": ev.get("allDay", False),
                         }
-                        st.rerun()  # Rapide car events en cache
+                        st.rerun()
 
             selected_event = st.session_state.get("selected_event")
 
-            # ===================== FORMULAIRE D'ÉDITION / SUPPRESSION (GAUCHE) =====================
             with col_left:
                 if selected_event:
                     if not selected_event.get("id"):
@@ -390,7 +356,6 @@ def events_page():
 
                         event_id = selected_event["id"]
 
-                        # ----- UPDATE -----
                         if submit_update:
                             start_dt = datetime.combine(day_input, start_time_input)
                             end_dt = datetime.combine(day_input, end_time_input)
@@ -413,7 +378,7 @@ def events_page():
                                     if update_resp.status_code in (200, 204):
                                         st.success("Évènement mis à jour.")
                                         st.session_state["selected_event"] = None
-                                        fetch_events.clear()  # Invalider cache
+                                        fetch_events.clear()
                                         st.rerun()
                                     else:
                                         try:
@@ -427,7 +392,6 @@ def events_page():
                                 except Exception as e:
                                     st.error(f"Erreur lors de la mise à jour : {e}")
 
-                        # ----- DELETE -----
                         if submit_delete:
                             try:
                                 delete_resp = requests.delete(
@@ -437,7 +401,7 @@ def events_page():
                                 if delete_resp.status_code in (200, 204):
                                     st.success("Évènement supprimé.")
                                     st.session_state["selected_event"] = None
-                                    fetch_events.clear()  # Invalider cache
+                                    fetch_events.clear()
                                     st.rerun()
                                 else:
                                     try:
@@ -468,13 +432,9 @@ def events_page():
     except Exception as e:
         st.error(f"Une erreur inattendue est survenue: {e}")
 
-
-# ===================== MAIN =====================
-
 def main():
     st.set_page_config(page_title="Calendrier", layout="wide")
 
-    # Init état de connexion en fonction des cookies
     if "logged_in" not in st.session_state:
         token, token_type = get_auth_from_storage()
         if token:
@@ -488,7 +448,6 @@ def main():
         events_page()
     else:
         login_page()
-
 
 if __name__ == "__main__":
     main()

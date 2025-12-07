@@ -5,10 +5,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 
-
-# Charger les variables d'environnement du .env
 load_dotenv()
-
 
 @pytest.fixture(scope="session")
 def engine():
@@ -25,7 +22,6 @@ def engine():
 
     engine = create_engine(db_url, connect_args=connect_args)
 
-    # Vérifie que Postgres est UP
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -36,7 +32,6 @@ def engine():
         )
 
     return engine
-
 
 @pytest.fixture
 def db_session(engine):

@@ -7,12 +7,8 @@ from datetime import datetime, timedelta, date, time
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-# ------------------------------------------------------------------
-# Path setup
-# ------------------------------------------------------------------
-
 ROOT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = ROOT_DIR.parent
+PROJECT_ROOT = ROOT_DIR
 API_DIR = PROJECT_ROOT / "01-api"
 AUTH_DIR = PROJECT_ROOT / "04-authentication"
 
@@ -27,10 +23,6 @@ try:
 except Exception as exc:
     print("Failed to import project modules:", exc)
     raise
-
-# ------------------------------------------------------------------
-# Data definition
-# ------------------------------------------------------------------
 
 USERS = [
     {
@@ -47,11 +39,6 @@ USERS = [
     },
 ]
 
-
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
-
 def get_last_monday(today: date | None = None) -> date:
     """
     Renvoie la date du LUNDI PRÉCÉDENT.
@@ -60,10 +47,9 @@ def get_last_monday(today: date | None = None) -> date:
     if today is None:
         today = datetime.utcnow().date()
 
-    weekday = today.weekday()  # 0 = lundi, 6 = dimanche
+    weekday = today.weekday()
     days_back = weekday + (7 if weekday == 0 else 0)
     return today - timedelta(days=days_back)
-
 
 def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
     """
@@ -72,10 +58,9 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
     """
     email = (user.email or "").lower()
 
-    # Planning pour Alexandre : profil "ingé / projet / sport"
     if "alexandre@" in email:
         return {
-            # Lundi
+
             0: [
                 {
                     "title": "Deep work - Matin",
@@ -99,7 +84,7 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
                     "location": "Salle de sport",
                 },
             ],
-            # Mardi
+
             1: [
                 {
                     "title": "Révisions DS / IA",
@@ -116,7 +101,7 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
                     "location": "Bureau",
                 },
             ],
-            # Mercredi
+
             2: [
                 {
                     "title": "Deep work - Matin",
@@ -133,7 +118,7 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
                     "location": "Bureau",
                 },
             ],
-            # Jeudi
+
             3: [
                 {
                     "title": "Lecture / Veille techno",
@@ -157,7 +142,7 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
                     "location": "Salle de sport",
                 },
             ],
-            # Vendredi
+
             4: [
                 {
                     "title": "Admin / Organisation",
@@ -183,10 +168,9 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
             ],
         }
 
-    # Planning pour Antoine : profil "cours / révisions / job étudiant"
     if "antoine@" in email:
         return {
-            # Lundi
+
             0: [
                 {
                     "title": "Cours - Matin",
@@ -203,7 +187,7 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
                     "location": "Campus",
                 },
             ],
-            # Mardi
+
             1: [
                 {
                     "title": "Révisions / Exercices",
@@ -220,7 +204,7 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
                     "location": "Magasin",
                 },
             ],
-            # Mercredi
+
             2: [
                 {
                     "title": "Cours - Matin",
@@ -237,7 +221,7 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
                     "location": "Campus",
                 },
             ],
-            # Jeudi
+
             3: [
                 {
                     "title": "Révisions solo",
@@ -254,7 +238,7 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
                     "location": "Gymnase",
                 },
             ],
-            # Vendredi
+
             4: [
                 {
                     "title": "Cours - Matin",
@@ -273,7 +257,6 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
             ],
         }
 
-    # Fallback si un autre utilisateur arrive plus tard
     return {
         d: [
             {
@@ -294,7 +277,6 @@ def get_daily_blocks_for_user(user: User) -> dict[int, list[dict]]:
         for d in range(5)
     }
 
-
 def create_timetable_events_for_user(
     user: User,
     start_monday: date,
@@ -310,9 +292,8 @@ def create_timetable_events_for_user(
 
     for offset in range(weeks * 7):
         current_day = start_monday + timedelta(days=offset)
-        weekday = current_day.weekday()  # 0 = lundi, 6 = dimanche
+        weekday = current_day.weekday()
 
-        # On ne remplit que du lundi au vendredi
         if weekday >= 5:
             continue
 
@@ -336,11 +317,6 @@ def create_timetable_events_for_user(
 
     return events
 
-
-# ------------------------------------------------------------------
-# Main
-# ------------------------------------------------------------------
-
 def main() -> int:
     SessionLocal = getattr(database, "SessionLocal", None)
     if SessionLocal is None:
@@ -350,7 +326,7 @@ def main() -> int:
     session = SessionLocal()
 
     try:
-        # Point de départ du planning : lundi précédent
+
         today = datetime.utcnow().date()
         start_monday = get_last_monday(today)
         weeks = 2
@@ -358,7 +334,7 @@ def main() -> int:
         print(f"📅 Génération de l'emploi du temps à partir du lundi {start_monday} pour {weeks} semaine(s).")
 
         for u in USERS:
-            # Vérifier si l'utilisateur existe déjà
+
             existing = session.execute(
                 select(User).where(User.email == u["email"])
             ).scalar_one_or_none()
@@ -377,7 +353,6 @@ def main() -> int:
                 session.flush()
                 print(f"👤 User created: {user.email}")
 
-            # On supprime d'abord les events dans la fenêtre des 2 semaines
             schedule_start = datetime.combine(start_monday, time.min)
             schedule_end = schedule_start + timedelta(weeks=weeks)
 
@@ -393,7 +368,6 @@ def main() -> int:
             if deleted:
                 print(f"  🧹 {deleted} events supprimés pour {user.email} dans la plage {schedule_start} → {schedule_end}")
 
-            # Puis on recrée un emploi du temps complet pour ces 2 semaines
             events = create_timetable_events_for_user(user, start_monday, weeks=weeks)
             session.add_all(events)
             print(f"  ✅ {len(events)} events créés pour {user.email}")
@@ -408,7 +382,6 @@ def main() -> int:
         return 4
     finally:
         session.close()
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

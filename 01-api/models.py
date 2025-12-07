@@ -1,5 +1,3 @@
-# 01-api/models.py
-
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Boolean, ForeignKey
@@ -8,11 +6,10 @@ from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
-
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)  # SERIAL
+    id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     display_name = Column(String(255), nullable=False)
@@ -31,11 +28,10 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
-
 class Event(Base):
     __tablename__ = "events"
 
-    id = Column(Integer, primary_key=True, index=True)  # SERIAL
+    id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
     title = Column(String(255), nullable=False)
