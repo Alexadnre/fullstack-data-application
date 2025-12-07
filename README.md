@@ -16,7 +16,7 @@ L’application permet à un utilisateur de s’inscrire, se connecter, et gére
 
 ## Architecture globale
 
-![Architecture](img\Architecture.png)
+![Architecture](img/Architecture.png)
 
 ---
 
@@ -26,7 +26,7 @@ Le modèle repose sur deux entités principales : `User` et `Event`, avec une re
 
 ## Diagramme de classes (simplifié)
 
-![Architecture](img\Classes.png)
+![Architecture](img/Classes.png)
 
 
 ### Contraintes principales
