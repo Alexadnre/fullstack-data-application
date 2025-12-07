@@ -2,7 +2,7 @@ import os
 import requests
 import streamlit as st
 
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 
 from streamlit_calendar import calendar as calendar_component  # composant FullCalendar
 from streamlit_cookies_manager import EncryptedCookieManager
@@ -139,14 +139,18 @@ def events_page():
     """
     Page d'affichage des événements protégée par le JWT.
     Vue type Google Calendar : semaine / créneaux de 30 minutes.
-    Permet d'éditer / supprimer un événement en cliquant dessus.
-    Édition via : jour + heure début + heure fin (plus de toggle 'jour complet').
+    - Clic sur un évènement : édition / suppression.
+    - Clic sur un créneau vide : création d'un évènement de 1h.
     """
     st.title("Mon agenda")
 
     # Init état pour l'évènement sélectionné
     if "selected_event" not in st.session_state:
         st.session_state["selected_event"] = None
+
+    # Pour éviter les doubles créations sur le même clic
+    if "last_calendar_action" not in st.session_state:
+        st.session_state["last_calendar_action"] = None
 
     # Récup du token depuis les cookies
     token, token_type = get_auth_from_storage()
@@ -190,33 +194,32 @@ def events_page():
                     }
                 )
 
-            # Options FullCalendar pour une vue semaine avec créneaux 30 min
+            # Options FullCalendar
             calendar_options = {
-                "initialView": "timeGridWeek",         # vue semaine en colonnes
-                "slotDuration": "00:30:00",            # créneaux de 30 minutes
-                "slotMinTime": "08:00:00",             # première ligne
-                "slotMaxTime": "20:00:00",             # dernière ligne
+                "initialView": "timeGridWeek",
+                "slotDuration": "00:30:00",
+                "slotMinTime": "08:00:00",
+                "slotMaxTime": "20:00:00",
                 "allDaySlot": False,
                 "nowIndicator": True,
                 "locale": "fr",
-                "firstDay": 1,                         # 1 = lundi
+                "firstDay": 1,
                 "headerToolbar": {
                     "left": "today prev,next",
                     "center": "title",
-                    "right": "",                       # pas de switch de vue
+                    "right": "",
                 },
+                # pas de sélection drag&drop pour éviter d'autres callbacks
+                "selectable": False,
             }
 
-            # CSS custom léger (facultatif)
             custom_css = """
                 .fc-toolbar-title {
                     font-size: 1.2rem;
                 }
             """
 
-            # Layout : colonne gauche = édition, colonne droite = calendrier
-            col_right,col_left = st.columns([2, 1])
-
+            col_right, col_left = st.columns([2, 1])
 
             # ===================== CALENDRIER (DROITE) =====================
             with col_right:
@@ -227,29 +230,75 @@ def events_page():
                     custom_css=custom_css,
                     key="calendar",
                 )
+                # st.write(cal_state)  # décommente pour debug si besoin
 
-            # ===================== GESTION DU CLIC SUR ÉVÈNEMENT =====================
-            # cal_state ressemble à :
-            # {
-            #   "callback": "eventClick",
-            #   "eventClick": { "event": { ... }, "view": { ... } }
-            # }
-            if cal_state and cal_state.get("callback") == "eventClick":
-                ev = cal_state["eventClick"]["event"]
-                selected_event = {
-                    "id": str(ev.get("id")) if ev.get("id") is not None else None,
-                    "title": ev.get("title", ""),
-                    "start": ev.get("start", ""),
-                    "end": ev.get("end", ""),
-                    "allDay": ev.get("allDay", False),
-                }
-                st.session_state["selected_event"] = selected_event
+            # ===================== GESTION DES CALLBACKS CALENDRIER =====================
+            from datetime import datetime, timedelta
+
+            if cal_state:
+                callback = cal_state.get("callback")
+
+                # ----- Création d'un évènement sur clic dans un créneau vide -----
+                if callback == "dateClick":
+                    dc = cal_state.get("dateClick", {})
+                    date_str = dc.get("date") or dc.get("dateStr")
+
+                    if date_str:
+                        # ID unique pour ce clic
+                        action_id = f"dateClick:{date_str}"
+
+                        # Si on a déjà traité ce clic, on ne refait rien
+                        if st.session_state["last_calendar_action"] != action_id:
+                            st.session_state["last_calendar_action"] = action_id
+
+                            try:
+                                dt = datetime.fromisoformat(
+                                    date_str.replace("Z", "+00:00")
+                                )
+                                start_dt = dt
+                                end_dt = dt + timedelta(hours=1)
+
+                                create_resp = requests.post(
+                                    f"{API_BASE_URL}/events",
+                                    headers=headers,
+                                    json={
+                                        "title": "Nouvel évènement",
+                                        "start_datetime": start_dt.isoformat(),
+                                        "end_datetime": end_dt.isoformat(),
+                                    },
+                                )
+
+                                if create_resp.status_code in (200, 201):
+                                    st.success("Évènement créé.")
+                                    st.rerun()
+                                else:
+                                    try:
+                                        err = create_resp.json()
+                                    except Exception:
+                                        err = create_resp.text
+                                    st.error(
+                                        f"Échec de la création de l'évènement (code {create_resp.status_code})."
+                                    )
+                                    st.write(err)
+                            except Exception as e:
+                                st.error(f"Erreur lors de la création de l'évènement : {e}")
+
+                # ----- Clic sur un évènement existant : on charge pour édition -----
+                if callback == "eventClick":
+                    ev = cal_state["eventClick"]["event"]
+                    selected_event = {
+                        "id": str(ev.get("id")) if ev.get("id") is not None else None,
+                        "title": ev.get("title", ""),
+                        "start": ev.get("start", ""),
+                        "end": ev.get("end", ""),
+                        "allDay": ev.get("allDay", False),
+                    }
+                    st.session_state["selected_event"] = selected_event
 
             selected_event = st.session_state.get("selected_event")
 
             # ===================== FORMULAIRE D'ÉDITION / SUPPRESSION (GAUCHE) =====================
             with col_left:
-                # Aucun formulaire tant qu'aucun événement n'a été cliqué
                 if selected_event:
                     if not selected_event.get("id"):
                         st.error(
@@ -258,11 +307,9 @@ def events_page():
                     else:
                         st.subheader("Éditer / supprimer l'évènement sélectionné")
 
-                        # Parsing de la date / heure à partir des champs ISO
                         start_date_default, start_time_default = parse_iso_to_date_time(
                             selected_event.get("start", "")
                         )
-                        # On récupère uniquement l'heure pour la fin
                         _, end_time_default = parse_iso_to_date_time(
                             selected_event.get("end", "")
                         )
@@ -273,19 +320,17 @@ def events_page():
                                 value=selected_event.get("title", ""),
                             )
 
-                            # Jour
                             day_input = st.date_input(
                                 "Jour",
                                 value=start_date_default,
                             )
 
-                            # Heures début / fin
                             col_t1, col_t2 = st.columns(2)
                             with col_t1:
                                 start_time_input = st.time_input(
                                     "Heure de début",
                                     value=start_time_default,
-                                    step=900,  # 15 min
+                                    step=900,
                                 )
                             with col_t2:
                                 end_time_input = st.time_input(
@@ -304,11 +349,9 @@ def events_page():
 
                         # ----- UPDATE -----
                         if submit_update:
-                            # Reconstruction des datetimes à partir de jour + heures
                             start_dt = datetime.combine(day_input, start_time_input)
                             end_dt = datetime.combine(day_input, end_time_input)
 
-                            # Vérification stricte : début < fin
                             if start_dt >= end_dt:
                                 st.error(
                                     "L'heure de début doit être strictement avant l'heure de fin."
@@ -322,12 +365,10 @@ def events_page():
                                             "title": title_input,
                                             "start_datetime": start_dt.isoformat(),
                                             "end_datetime": end_dt.isoformat(),
-                                            # plus de champ all_day dans l'édition
                                         },
                                     )
                                     if update_resp.status_code in (200, 204):
                                         st.success("Évènement mis à jour.")
-                                        # On force le refresh des données
                                         st.session_state["selected_event"] = None
                                         st.rerun()
                                     else:
