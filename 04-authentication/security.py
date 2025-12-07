@@ -87,12 +87,12 @@ def decode_jwt(token: str) -> dict:
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired.",
+            detail="Jeton expiré.",
         )
     except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token.",
+            detail="Jeton invalide.",
         )
 
 def verify_authorization_header(access_token: str) -> dict:
@@ -103,7 +103,7 @@ def verify_authorization_header(access_token: str) -> dict:
     if not access_token or not access_token.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No auth provided.",
+            detail="Aucune authentification fournie.",
         )
 
     token = access_token.split("Bearer ")[1]
@@ -119,10 +119,10 @@ def get_current_user(authorization: str = Header(None, alias="Authorization"), d
     payload = verify_authorization_header(authorization)
     user_id = payload.get("user_id")
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Jeton invalide.")
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilisateur introuvable.")
 
     return user

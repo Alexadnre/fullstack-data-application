@@ -40,13 +40,13 @@ def _register_and_login(client, email="integration_auth@test.com"):
 def test_events_requires_auth_header(client):
     resp = client.get("/events")
     assert resp.status_code == 401
-    assert "No auth provided" in resp.json()["detail"]
+    assert "Aucune authentification fournie" in resp.json()["detail"]
 
 
 def test_events_rejects_non_bearer_prefix(client):
     resp = client.get("/events", headers={"Authorization": "Token abc"})
     assert resp.status_code == 401
-    assert "No auth provided" in resp.json()["detail"]
+    assert "Aucune authentification fournie" in resp.json()["detail"]
 
 
 def test_events_rejects_invalid_token(client):
@@ -55,14 +55,14 @@ def test_events_rejects_invalid_token(client):
         headers={"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.invalid"},
     )
     assert resp.status_code == 401
-    assert "Invalid token" in resp.json()["detail"]
+    assert "Jeton invalide" in resp.json()["detail"]
 
 
 def test_get_event_not_found_returns_404(client):
     token = _register_and_login(client, email="integration_auth_404@test.com")
     resp = client.get("/events/999999", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 404
-    assert "Event not found" in resp.json()["detail"]
+    assert "Évènement introuvable" in resp.json()["detail"]
 
 
 def test_create_event_without_auth_returns_401(client):
@@ -74,4 +74,4 @@ def test_create_event_without_auth_returns_401(client):
     }
     resp = client.post("/events", json=payload)
     assert resp.status_code == 401
-    assert "No auth provided" in resp.json()["detail"]
+    assert "Aucune authentification fournie" in resp.json()["detail"]

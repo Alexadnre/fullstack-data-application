@@ -1,6 +1,7 @@
 import os
 import requests
 import streamlit as st
+import time as time_module
 
 from datetime import datetime, date, time, timedelta
 
@@ -8,6 +9,24 @@ from streamlit_calendar import calendar as calendar_component
 from streamlit_cookies_manager import EncryptedCookieManager
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
+
+def api_request_with_retries(method: str, url: str, max_attempts: int = 3, wait_seconds: int = 2, **kwargs):
+    """
+    Exécute une requête HTTP avec retries si l'API/DB est momentanément indisponible.
+    """
+    # Timeout court pour éviter les appels bloquants
+    kwargs.setdefault("timeout", 5)
+    last_exc = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return requests.request(method, url, **kwargs)
+        except requests.exceptions.ConnectionError as exc:
+            last_exc = exc
+            if attempt == max_attempts:
+                break
+            time_module.sleep(wait_seconds)
+    # Si on sort de la boucle, on relance l'exception pour gestion en amont.
+    raise last_exc
 
 cookies = EncryptedCookieManager(
     prefix="mon-app-calendrier/",
@@ -53,16 +72,42 @@ def clear_auth():
 def show_api_error(response, default_message="Erreur API"):
     """
     Affiche un message d'erreur HTTP structuré dans l'UI.
+    Tout est affiché dans le cadre rouge Streamlit.
     """
     try:
         data = response.json()
-        detail = data.get("detail") if isinstance(data, dict) else None
     except Exception:
-        detail = None
+        data = None
 
-    detail_text = detail or response.text or "Aucun detail fourni."
-    st.error(f"{default_message} (code {response.status_code})")
-    st.write(detail_text)
+    detail = None
+
+    # Cas classique FastAPI: {"detail": "..."} ou {"detail": {...}}
+    if isinstance(data, dict):
+        detail = data.get("detail")
+
+    # Cas validation FastAPI: [{"loc": [...], "msg": "...", ...}, ...]
+    if detail is None and isinstance(data, list):
+        parts = []
+        for item in data:
+            if isinstance(item, dict):
+                field = item.get("loc", ["?"])[-1]
+                msg = item.get("msg", "")
+                parts.append(f"{field}: {msg}")
+        if parts:
+            detail = " ; ".join(parts)
+
+    # Fallback
+    if not detail:
+        detail = response.text or "Aucun détail fourni."
+
+    # TOUT dans le cadre rouge
+    st.error(f"{default_message} (code {response.status_code})\n\n{detail}")
+
+def show_connection_error(action: str, exc: Exception):
+    """
+    Affiche une erreur réseau en français.
+    """
+    st.error(f"{action} impossible : service API injoignable après 3 tentatives.\n\n{exc}")
 
 def parse_iso_to_date_time(iso_str: str):
     """
@@ -99,7 +144,8 @@ def login_page():
 
         if submitted_login:
             try:
-                response = requests.post(
+                response = api_request_with_retries(
+                    "post",
                     f"{API_BASE_URL}/auth/login",
                     json={
                         "email": email_input,
@@ -122,11 +168,12 @@ def login_page():
                     st.success("Connexion reussie !")
                     st.rerun()
                 else:
-                    st.error("Email ou mot de passe incorrect.")
                     show_api_error(response, "Erreur de connexion")
 
-            except requests.exceptions.ConnectionError:
-                st.error(f"Impossible de se connecter a l'API a l'adresse: {API_BASE_URL}")
+            except requests.exceptions.ConnectionError as exc:
+                show_connection_error("Connexion impossible", exc)
+            except requests.exceptions.RequestException as exc:
+                show_connection_error("Connexion impossible", exc)
             except Exception as e:
                 st.error(f"Une erreur inattendue est survenue: {e}")
 
@@ -157,13 +204,19 @@ def login_page():
                 }
 
                 try:
-                    response = requests.post(f"{API_BASE_URL}/auth/register", json=payload)
+                    response = api_request_with_retries(
+                        "post",
+                        f"{API_BASE_URL}/auth/register",
+                        json=payload,
+                    )
                     if response.status_code == 201:
                         st.success("Compte cree. Vous pouvez vous connecter.")
                     else:
                         show_api_error(response, "Echec de l'inscription")
-                except requests.exceptions.ConnectionError:
-                    st.error(f"Impossible de joindre l'API: {API_BASE_URL}")
+                except requests.exceptions.ConnectionError as exc:
+                    show_connection_error("Inscription", exc)
+                except requests.exceptions.RequestException as exc:
+                    show_connection_error("Inscription", exc)
                 except Exception as e:
                     st.error(f"Une erreur inattendue est survenue: {e}")
 
@@ -202,7 +255,15 @@ def events_page():
 
     @st.cache_data(show_spinner=False)
     def fetch_events(auth_header: str):
-        resp = requests.get(f"{API_BASE_URL}/events", headers={"Authorization": auth_header})
+        try:
+            resp = api_request_with_retries(
+                "get",
+                f"{API_BASE_URL}/events",
+                headers={"Authorization": auth_header},
+            )
+        except requests.exceptions.ConnectionError as exc:
+            return {"error": str(exc)}, 503
+
         if resp.status_code == 200:
             return resp.json() or [], 200
         return [], resp.status_code
@@ -303,7 +364,8 @@ def events_page():
                                 start_dt = dt
                                 end_dt = dt + timedelta(hours=1)
 
-                                create_resp = requests.post(
+                                create_resp = api_request_with_retries(
+                                    "post",
                                     f"{API_BASE_URL}/events",
                                     headers=headers,
                                     json={
@@ -327,14 +389,12 @@ def events_page():
                                     fetch_events.clear()
                                     st.rerun()
                                 else:
-                                    try:
-                                        err = create_resp.json()
-                                    except Exception:
-                                        err = create_resp.text
-                                    st.error(
-                                        f"Échec de la création de l'évènement (code {create_resp.status_code})."
+                                    show_api_error(
+                                        create_resp,
+                                        "Echec de la creation de l'evenement",
                                     )
-                                    st.write(err)
+                            except requests.exceptions.RequestException as exc:
+                                show_connection_error("Création de l'évènement", exc)
                             except Exception as e:
                                 st.error(f"Erreur lors de la création de l'évènement : {e}")
 
@@ -415,7 +475,8 @@ def events_page():
                                 )
                             else:
                                 try:
-                                    update_resp = requests.put(
+                                    update_resp = api_request_with_retries(
+                                        "put",
                                         f"{API_BASE_URL}/events/{event_id}",
                                         headers=headers,
                                         json={
@@ -430,37 +491,34 @@ def events_page():
                                         fetch_events.clear()
                                         st.rerun()
                                     else:
-                                        try:
-                                            err = update_resp.json()
-                                        except Exception:
-                                            err = update_resp.text
-                                        st.error(
-                                            f"Échec de la mise à jour (code {update_resp.status_code})"
+                                        show_api_error(
+                                            update_resp,
+                                            "Echec de la mise a jour de l'evenement",
                                         )
-                                        st.write(err)
+                                except requests.exceptions.RequestException as exc:
+                                    show_connection_error("Mise à jour de l'évènement", exc)
                                 except Exception as e:
                                     st.error(f"Erreur lors de la mise à jour : {e}")
 
                         if submit_delete:
                             try:
-                                delete_resp = requests.delete(
+                                delete_resp = api_request_with_retries(
+                                    "delete",
                                     f"{API_BASE_URL}/events/{event_id}",
                                     headers=headers,
                                 )
                                 if delete_resp.status_code in (200, 204):
-                                    st.success("Évènement supprimé.")
+                                    st.success("Evenement supprime.")
                                     st.session_state["selected_event"] = None
                                     fetch_events.clear()
                                     st.rerun()
                                 else:
-                                    try:
-                                        err = delete_resp.json()
-                                    except Exception:
-                                        err = delete_resp.text
-                                    st.error(
-                                        f"Échec de la suppression (code {delete_resp.status_code})"
+                                    show_api_error(
+                                        delete_resp,
+                                        "Echec de la suppression de l'evenement",
                                     )
-                                    st.write(err)
+                            except requests.exceptions.RequestException as exc:
+                                show_connection_error("Suppression de l'évènement", exc)
                             except Exception as e:
                                 st.error(f"Erreur lors de la suppression : {e}")
 
@@ -468,6 +526,33 @@ def events_page():
             st.warning("Session expirée ou non autorisée. Veuillez vous reconnecter.")
             clear_auth()
             st.rerun()
+        elif status_code == 401:
+            st.warning("Session expirée ou non autorisée. Veuillez vous reconnecter.")
+            clear_auth()
+            st.rerun()
+        elif status_code == 503:
+            class _Resp:
+                def __init__(self, status_code, text=""):
+                    self.status_code = status_code
+                    self.text = text
+                def json(self):
+                    return {}
+            show_api_error(
+                _Resp(status_code, "API indisponible après plusieurs tentatives."),
+                "Echec de récupération des événements",
+            )
+        elif status_code == 503:
+            err_msg = events_data.get("error") if isinstance(events_data, dict) else ""
+            class _Resp:
+                def __init__(self, status_code, text=""):
+                    self.status_code = status_code
+                    self.text = text
+                def json(self):
+                    return {}
+            show_api_error(
+                _Resp(status_code, err_msg or "API indisponible après plusieurs tentatives."),
+                "Echec de récupération des événements",
+            )
         else:
             class _Resp:
                 def __init__(self, status_code, text=""):
@@ -477,13 +562,13 @@ def events_page():
                     return {}
             show_api_error(
                 _Resp(status_code, "Erreur lors de la récupération des événements"),
-                "Echec de recuperation des evenements",
+                "Echec de récupération des événements",
             )
 
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as exc:
         st.error(
-            f"Erreur de connexion à l'API: {API_BASE_URL}. "
-            "Vérifiez que votre service 'api' est bien démarré."
+            f"Erreur de connexion à l'API: {API_BASE_URL} après 3 tentatives de 5s. "
+            f"Détail: {exc}"
         )
     except Exception as e:
         st.error(f"Une erreur inattendue est survenue: {e}")

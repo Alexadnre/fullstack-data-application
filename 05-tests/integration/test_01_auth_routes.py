@@ -87,7 +87,7 @@ def test_register_same_email_fails(client):
     assert r2.status_code == 400
 
     data = r2.json()
-    assert "Email already registered" in data["detail"]
+    assert "Email déjà enregistré" in data["detail"]
 
 def test_login_success(client):
 
@@ -132,7 +132,7 @@ def test_login_wrong_password(client):
     )
     assert r_login.status_code == 401
     data = r_login.json()
-    assert "Incorrect email or password" in data["detail"]
+    assert "Email ou mot de passe incorrect" in data["detail"]
 
 def test_login_unknown_email(client):
     r_login = client.post(
@@ -144,12 +144,12 @@ def test_login_unknown_email(client):
     )
     assert r_login.status_code == 401
     data = r_login.json()
-    assert "Incorrect email or password" in data["detail"]
+    assert "Email ou mot de passe incorrect" in data["detail"]
 
 def test_events_requires_auth(client):
     resp = client.get("/events")
     assert resp.status_code == 401
-    assert "No auth provided" in resp.json()["detail"]
+    assert "Aucune authentification fournie" in resp.json()["detail"]
 
 def test_events_with_valid_token(client):
     payload = {

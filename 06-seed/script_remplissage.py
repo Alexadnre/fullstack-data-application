@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 ROOT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = ROOT_DIR
+PROJECT_ROOT = ROOT_DIR.parent
 API_DIR = PROJECT_ROOT / "01-api"
 AUTH_DIR = PROJECT_ROOT / "04-authentication"
 

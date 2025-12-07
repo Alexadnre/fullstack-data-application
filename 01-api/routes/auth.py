@@ -27,7 +27,7 @@ def register_user(
     stmt = select(User).where(User.email == payload.email)
     existing = db.execute(stmt).scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Email déjà enregistré")
 
     user = User(
         email=payload.email,
@@ -52,7 +52,7 @@ def login(
     if not user or not security.check_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Email ou mot de passe incorrect",
         )
 
     access_token = security.encode_jwt(user_id=user.id)

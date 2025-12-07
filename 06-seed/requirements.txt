@@ -1,0 +1,5 @@
+SQLAlchemy
+psycopg[binary]
+python-dotenv
+PyJWT
+fastapi

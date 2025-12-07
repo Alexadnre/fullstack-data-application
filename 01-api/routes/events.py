@@ -38,7 +38,7 @@ def get_event(
         .first()
     )
     if not event:
-        raise HTTPException(404, "Event not found")
+        raise HTTPException(404, "Évènement introuvable")
     return event
 
 @router.post("/", response_model=EventRead)
@@ -67,7 +67,7 @@ def update_event(
         .first()
     )
     if not event:
-        raise HTTPException(404, "Event not found")
+        raise HTTPException(404, "Évènement introuvable")
 
     for key, value in payload.dict(exclude_unset=True).items():
         setattr(event, key, value)
@@ -88,7 +88,7 @@ def delete_event(
         .first()
     )
     if not event:
-        raise HTTPException(404, "Event not found")
+        raise HTTPException(404, "Évènement introuvable")
 
     db.delete(event)
     db.commit()
