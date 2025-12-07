@@ -70,53 +70,100 @@ def parse_iso_to_date_time(iso_str: str):
 
 def login_page():
     """
-    Page de connexion avec gestion du module JWT.
+    Page d'authentification : connexion et inscription affichees cote a cote.
     """
-    st.title("Connexion au Calendrier")
+    st.title("Connexion / Inscription")
+    st.write("Connectez-vous ou creez un compte pour acceder a votre agenda.")
 
-    with st.form("login_form"):
-        email_input = st.text_input("Email")
-        password_input = st.text_input("Mot de passe", type="password")
-        submitted = st.form_submit_button("Se connecter")
+    col_login, col_divider, col_register = st.columns([1, 0.05, 1])
 
-    if submitted:
-        try:
-            response = requests.post(
-                f"{API_BASE_URL}/auth/login",
-                json={
-                    "email": email_input,
-                    "password": password_input,
-                },
-            )
+    with col_login:
+        st.subheader("Connexion")
+        with st.form("login_form"):
+            email_input = st.text_input("Email", key="login_email")
+            password_input = st.text_input("Mot de passe", type="password", key="login_password")
+            submitted_login = st.form_submit_button("Se connecter")
 
-            if response.status_code == 200:
-                data = response.json()
-                access_token = data.get("access_token")
-                token_type = data.get("token_type", "bearer")
+        if submitted_login:
+            try:
+                response = requests.post(
+                    f"{API_BASE_URL}/auth/login",
+                    json={
+                        "email": email_input,
+                        "password": password_input,
+                    },
+                )
 
-                if not access_token:
-                    st.error("La réponse de l'API ne contient pas de token.")
-                    st.write("Réponse brute :", data)
-                    return
+                if response.status_code == 200:
+                    data = response.json()
+                    access_token = data.get("access_token")
+                    token_type = data.get("token_type", "bearer")
 
-                set_auth_in_storage(access_token, token_type)
+                    if not access_token:
+                        st.error("La reponse de l'API ne contient pas de token.")
+                        st.write("Reponse brute :", data)
+                        return
 
-                st.success("Connexion réussie !")
-                st.rerun()
+                    set_auth_in_storage(access_token, token_type)
+
+                    st.success("Connexion reussie !")
+                    st.rerun()
+                else:
+                    st.error("Email ou mot de passe incorrect.")
+                    try:
+                        error_detail = response.json().get("detail", "Aucun detail fourni.")
+                        st.error(f"Erreur API ({response.status_code}) : {error_detail}")
+                    except Exception:
+                        st.error(
+                            f"Erreur API: {response.status_code}. (Verifiez la reponse du serveur)"
+                        )
+
+            except requests.exceptions.ConnectionError:
+                st.error(f"Impossible de se connecter a l'API a l'adresse: {API_BASE_URL}")
+            except Exception as e:
+                st.error(f"Une erreur inattendue est survenue: {e}")
+
+    with col_divider:
+        st.markdown(
+            "<div style='border-left: 1px solid #e5e7eb; height: 100%;'></div>",
+            unsafe_allow_html=True,
+        )
+
+    with col_register:
+        st.subheader("Inscription")
+        with st.form("register_form"):
+            display_name = st.text_input("Nom affiche", key="register_display_name")
+            email_register = st.text_input("Email", key="register_email")
+            password_register = st.text_input("Mot de passe", type="password", key="register_password")
+            timezone_input = "Europe/Paris"
+            submitted_register = st.form_submit_button("Creer mon compte")
+
+        if submitted_register:
+            if not (display_name and email_register and password_register):
+                st.error("Merci de remplir tous les champs obligatoires.")
             else:
-                st.error("Email ou mot de passe incorrect.")
-                try:
-                    error_detail = response.json().get("detail", "Aucun détail fourni.")
-                    st.error(f"Erreur API ({response.status_code}) : {error_detail}")
-                except Exception:
-                    st.error(
-                        f"Erreur API: {response.status_code}. (Vérifiez la réponse du serveur)"
-                    )
+                payload = {
+                    "display_name": display_name,
+                    "email": email_register,
+                    "password": password_register,
+                    "timezone": timezone_input or "Europe/Paris",
+                }
 
-        except requests.exceptions.ConnectionError:
-            st.error(f"Impossible de se connecter à l'API à l'adresse: {API_BASE_URL}")
-        except Exception as e:
-            st.error(f"Une erreur inattendue est survenue: {e}")
+                try:
+                    response = requests.post(f"{API_BASE_URL}/auth/register", json=payload)
+                    if response.status_code == 201:
+                        st.success("Compte cree. Vous pouvez vous connecter.")
+                    else:
+                        try:
+                            detail = response.json().get("detail", response.text)
+                        except Exception:
+                            detail = response.text
+                        st.error(f"echec de l'inscription (code {response.status_code}).")
+                        st.write(detail)
+                except requests.exceptions.ConnectionError:
+                    st.error(f"Impossible de joindre l'API: {API_BASE_URL}")
+                except Exception as e:
+                    st.error(f"Une erreur inattendue est survenue: {e}")
 
 def events_page():
     """
