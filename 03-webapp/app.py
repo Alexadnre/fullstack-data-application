@@ -50,6 +50,19 @@ def clear_auth():
     st.session_state.pop("jwt_token", None)
     st.session_state.pop("token_type", None)
     st.session_state["logged_in"] = False
+def show_api_error(response, default_message="Erreur API"):
+    """
+    Affiche un message d'erreur HTTP structuré dans l'UI.
+    """
+    try:
+        data = response.json()
+        detail = data.get("detail") if isinstance(data, dict) else None
+    except Exception:
+        detail = None
+
+    detail_text = detail or response.text or "Aucun detail fourni."
+    st.error(f"{default_message} (code {response.status_code})")
+    st.write(detail_text)
 
 def parse_iso_to_date_time(iso_str: str):
     """
@@ -110,13 +123,7 @@ def login_page():
                     st.rerun()
                 else:
                     st.error("Email ou mot de passe incorrect.")
-                    try:
-                        error_detail = response.json().get("detail", "Aucun detail fourni.")
-                        st.error(f"Erreur API ({response.status_code}) : {error_detail}")
-                    except Exception:
-                        st.error(
-                            f"Erreur API: {response.status_code}. (Verifiez la reponse du serveur)"
-                        )
+                    show_api_error(response, "Erreur de connexion")
 
             except requests.exceptions.ConnectionError:
                 st.error(f"Impossible de se connecter a l'API a l'adresse: {API_BASE_URL}")
@@ -154,12 +161,7 @@ def login_page():
                     if response.status_code == 201:
                         st.success("Compte cree. Vous pouvez vous connecter.")
                     else:
-                        try:
-                            detail = response.json().get("detail", response.text)
-                        except Exception:
-                            detail = response.text
-                        st.error(f"echec de l'inscription (code {response.status_code}).")
-                        st.write(detail)
+                        show_api_error(response, "Echec de l'inscription")
                 except requests.exceptions.ConnectionError:
                     st.error(f"Impossible de joindre l'API: {API_BASE_URL}")
                 except Exception as e:
@@ -467,8 +469,15 @@ def events_page():
             clear_auth()
             st.rerun()
         else:
-            st.error(
-                f"Erreur lors de la récupération des événements (Code: {status_code})"
+            class _Resp:
+                def __init__(self, status_code, text=""):
+                    self.status_code = status_code
+                    self.text = text
+                def json(self):
+                    return {}
+            show_api_error(
+                _Resp(status_code, "Erreur lors de la récupération des événements"),
+                "Echec de recuperation des evenements",
             )
 
     except requests.exceptions.ConnectionError:

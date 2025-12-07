@@ -102,7 +102,7 @@ def test_login_success(client):
 
     r_login = client.post(
         "/auth/login",
-        params={
+        json={
             "email": payload["email"],
             "password": payload["password"],
         },
@@ -125,7 +125,7 @@ def test_login_wrong_password(client):
 
     r_login = client.post(
         "/auth/login",
-        params={
+        json={
             "email": payload["email"],
             "password": "BadPwd",
         },
@@ -137,7 +137,7 @@ def test_login_wrong_password(client):
 def test_login_unknown_email(client):
     r_login = client.post(
         "/auth/login",
-        params={
+        json={
             "email": "does_not_exist_integration@test.com",
             "password": "whatever",
         },
@@ -145,3 +145,35 @@ def test_login_unknown_email(client):
     assert r_login.status_code == 401
     data = r_login.json()
     assert "Incorrect email or password" in data["detail"]
+
+def test_events_requires_auth(client):
+    resp = client.get("/events")
+    assert resp.status_code == 401
+    assert "No auth provided" in resp.json()["detail"]
+
+def test_events_with_valid_token(client):
+    payload = {
+        "email": "integration_events@test.com",
+        "password": "EventsPwd123!",
+        "display_name": "Events User",
+        "timezone": "Europe/Paris",
+    }
+    r_reg = client.post("/auth/register", json=payload)
+    assert r_reg.status_code == 201
+
+    r_login = client.post(
+        "/auth/login",
+        json={
+            "email": payload["email"],
+            "password": payload["password"],
+        },
+    )
+    assert r_login.status_code == 200
+    token = r_login.json()["access_token"]
+
+    resp = client.get(
+        "/events",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
