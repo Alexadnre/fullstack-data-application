@@ -58,20 +58,6 @@ services:
     networks:
       - calendar_net
 
-  remplissage:
-    build:
-      context: ./06-remplissage
-    container_name: calendar_remplissage
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL_PROD}
-    depends_on:
-      - api
-    restart: unless-stopped
-    networks:
-      - calendar_net
-
 volumes:
   postgres_data:
 

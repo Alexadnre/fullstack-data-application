@@ -12,8 +12,9 @@ from sqlalchemy.exc import SQLAlchemyError
 # ------------------------------------------------------------------
 
 ROOT_DIR = Path(__file__).resolve().parent
-API_DIR = ROOT_DIR / "01-api"
-AUTH_DIR = ROOT_DIR / "04-authentication"
+PROJECT_ROOT = ROOT_DIR.parent
+API_DIR = PROJECT_ROOT / "01-api"
+AUTH_DIR = PROJECT_ROOT / "04-authentication"
 
 for p in (str(API_DIR), str(AUTH_DIR)):
     if p not in sys.path:
