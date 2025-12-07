@@ -172,27 +172,45 @@ def events_page():
         "Authorization": f"{token_type.capitalize()} {token}"
     }
 
-    try:
-        response = requests.get(
-            f"{API_BASE_URL}/events",
-            headers=headers,
-        )
+    # Cache des événements - invalidé manuellement après modif
+    @st.cache_data(show_spinner=False)
+    def fetch_events(auth_header: str):
+        resp = requests.get(f"{API_BASE_URL}/events", headers={"Authorization": auth_header})
+        if resp.status_code == 200:
+            return resp.json() or [], 200
+        return [], resp.status_code
 
-        if response.status_code == 200:
-            events_data = response.json() or []
+    try:
+        auth_header = f"{token_type.capitalize()} {token}"
+        events_data, status_code = fetch_events(auth_header)
+
+        if status_code == 200:
 
             # Transforme les événements de l'API -> format FullCalendar
+            # Récupère l'ID de l'événement sélectionné pour le style visuel
+            selected_event_data = st.session_state.get("selected_event", {})
+            selected_id = selected_event_data.get("id") if selected_event_data else None
+
             calendar_events = []
             for ev in events_data:
-                calendar_events.append(
-                    {
-                        "id": str(ev["id"]),
-                        "title": ev["title"],
-                        "start": ev["start_datetime"],  # ISO8601
-                        "end": ev["end_datetime"],
-                        "allDay": ev.get("all_day", False),
-                    }
-                )
+                event_obj = {
+                    "id": str(ev["id"]),
+                    "title": ev["title"],
+                    "start": ev["start_datetime"],  # ISO8601
+                    "end": ev["end_datetime"],
+                    "allDay": ev.get("all_day", False),
+                }
+
+                # Style de sélection : vert pour l'événement sélectionné, bleu par défaut
+                if str(ev["id"]) == selected_id:
+                    event_obj["backgroundColor"] = "#22C55E"
+                    event_obj["borderColor"] = "#16A34A"
+                    event_obj["textColor"] = "#FFFFFF"
+                else:
+                    event_obj["backgroundColor"] = "#3788D8"
+                    event_obj["borderColor"] = "#2563EB"
+
+                calendar_events.append(event_obj)
 
             # Options FullCalendar
             calendar_options = {
@@ -211,11 +229,20 @@ def events_page():
                 },
                 # pas de sélection drag&drop pour éviter d'autres callbacks
                 "selectable": False,
+                "contentHeight": "auto",
             }
 
             custom_css = """
                 .fc-toolbar-title {
                     font-size: 1.2rem;
+                }
+                .fc-event {
+                    transition: all 0.2s ease;
+                    cursor: pointer;
+                }
+                .fc-event:hover {
+                    opacity: 0.9;
+                    transform: scale(1.02);
                 }
             """
 
@@ -270,6 +297,16 @@ def events_page():
 
                                 if create_resp.status_code in (200, 201):
                                     st.success("Évènement créé.")
+                                    # Sélectionner automatiquement le nouvel événement
+                                    new_event = create_resp.json()
+                                    st.session_state["selected_event"] = {
+                                        "id": str(new_event["id"]),
+                                        "title": new_event["title"],
+                                        "start": new_event["start_datetime"],
+                                        "end": new_event["end_datetime"],
+                                        "allDay": new_event.get("all_day", False),
+                                    }
+                                    fetch_events.clear()  # Invalider cache pour voir le nouvel event
                                     st.rerun()
                                 else:
                                     try:
@@ -286,14 +323,20 @@ def events_page():
                 # ----- Clic sur un évènement existant : on charge pour édition -----
                 if callback == "eventClick":
                     ev = cal_state["eventClick"]["event"]
-                    selected_event = {
-                        "id": str(ev.get("id")) if ev.get("id") is not None else None,
-                        "title": ev.get("title", ""),
-                        "start": ev.get("start", ""),
-                        "end": ev.get("end", ""),
-                        "allDay": ev.get("allDay", False),
-                    }
-                    st.session_state["selected_event"] = selected_event
+                    new_id = str(ev.get("id")) if ev.get("id") is not None else None
+                    current = st.session_state.get("selected_event", {})
+                    current_id = current.get("id") if current else None
+
+                    # Ne rerun que si sélection différente (évite boucle infinie)
+                    if new_id != current_id:
+                        st.session_state["selected_event"] = {
+                            "id": new_id,
+                            "title": ev.get("title", ""),
+                            "start": ev.get("start", ""),
+                            "end": ev.get("end", ""),
+                            "allDay": ev.get("allDay", False),
+                        }
+                        st.rerun()  # Rapide car events en cache
 
             selected_event = st.session_state.get("selected_event")
 
@@ -370,6 +413,7 @@ def events_page():
                                     if update_resp.status_code in (200, 204):
                                         st.success("Évènement mis à jour.")
                                         st.session_state["selected_event"] = None
+                                        fetch_events.clear()  # Invalider cache
                                         st.rerun()
                                     else:
                                         try:
@@ -393,6 +437,7 @@ def events_page():
                                 if delete_resp.status_code in (200, 204):
                                     st.success("Évènement supprimé.")
                                     st.session_state["selected_event"] = None
+                                    fetch_events.clear()  # Invalider cache
                                     st.rerun()
                                 else:
                                     try:
@@ -406,18 +451,14 @@ def events_page():
                             except Exception as e:
                                 st.error(f"Erreur lors de la suppression : {e}")
 
-        elif response.status_code == 401:
+        elif status_code == 401:
             st.warning("Session expirée ou non autorisée. Veuillez vous reconnecter.")
             clear_auth()
             st.rerun()
         else:
             st.error(
-                f"Erreur lors de la récupération des événements (Code: {response.status_code})"
+                f"Erreur lors de la récupération des événements (Code: {status_code})"
             )
-            try:
-                st.write(response.json())
-            except Exception:
-                pass
 
     except requests.exceptions.ConnectionError:
         st.error(
